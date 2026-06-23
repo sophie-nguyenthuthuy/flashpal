@@ -131,6 +131,21 @@
   .g-hard { background: linear-gradient(135deg, #ffc06f, #ff9d4d); }
   .g-good { background: linear-gradient(135deg, #7ad0a0, #38b886); }
   .g-easy { background: linear-gradient(135deg, #8ec6ff, #6f8bff); }
+  .grade.suggest { box-shadow: 0 0 0 3px var(--card), 0 0 0 6px var(--grape), var(--shadow-sm); transform: translateY(-3px) scale(1.04); }
+
+  /* typed-answer mode */
+  .typed { display: flex; gap: 10px; max-width: 560px; margin: 0 auto 14px; }
+  .typed input { flex: 1; border: 2px solid #ece3ff; border-radius: 16px; padding: 14px 16px; font-family: inherit; font-size: 1.05rem; background: #fff; color: var(--ink); }
+  .typed input:focus { outline: none; border-color: var(--grape); }
+  body.dark .typed input { background: #1f1a38; border-color: #3a3160; }
+  .verdict { max-width: 560px; margin: 0 auto 14px; padding: 12px 18px; border-radius: 14px; font-weight: 700; text-align: center; }
+  .verdict.good { background: #e3f7ec; color: var(--mint-d); }
+  .verdict.bad { background: #ffe9ee; color: var(--pink-d); }
+  body.dark .verdict.good { background: #1e3a30; } body.dark .verdict.bad { background: #3a1f2b; }
+  .opt-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .opt-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--grape); cursor: pointer; }
+  .opt-check span b { display: block; font-size: .95rem; }
+  .opt-check span small { color: #9a8bb0; font-weight: 600; }
 
   .done-card { text-align: center; background: var(--card); border-radius: 26px; padding: 44px; box-shadow: var(--shadow); }
   .done-card .big { font-size: 3.4rem; }
@@ -320,6 +335,29 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
   </div>
 </div>
 
+<!-- DECK OPTIONS MODAL -->
+<div class="modal-bg" id="deckOptsModal">
+  <div class="modal">
+    <h2 id="deckOptsTitle">⚙️ Deck options</h2>
+    <div class="field">
+      <label>New cards per day</label>
+      <input id="optNewPerDay" type="number" min="0" max="999" />
+    </div>
+    <div class="field">
+      <label class="opt-check"><input id="optTyped" type="checkbox" />
+        <span><b>⌨ Typed-answer mode</b><small>Type the answer; FlashPal checks it for you (basic cards).</small></span></label>
+    </div>
+    <div class="field">
+      <label class="opt-check"><input id="optReverse" type="checkbox" />
+        <span><b>↔ Also study reverse</b><small>Adds a back → front review for each basic card, scheduled separately.</small></span></label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn grape" id="saveDeckOpts">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 //// ---------- storage ----------
 const KEY = 'flashpal.v1';
@@ -330,7 +368,7 @@ const todayStr = () => new Date().toISOString().slice(0,10);
 const now = () => Date.now();
 const DAY = 86400000;
 
-let state = normalize(load()) || seed();
+let state = normalize(load()) || normalize(seed());
 
 // repair partial/legacy/hand-edited storage so the app never throws on bad shape
 function normalize(s) {
@@ -342,6 +380,13 @@ function normalize(s) {
     if (!d.id) d.id = rid();
     if (typeof d.emoji !== 'string') d.emoji = '📚';
     if (typeof d.name !== 'string') d.name = 'Untitled';
+    // per-deck study options
+    if (!d.opts || typeof d.opts !== 'object') d.opts = {};
+    if (typeof d.opts.newPerDay !== 'number' || d.opts.newPerDay < 0) d.opts.newPerDay = 20;
+    if (typeof d.opts.typed !== 'boolean') d.opts.typed = false;
+    if (d.opts.reverse !== 'both') d.opts.reverse = 'off';
+    // daily new-card counter (resets each calendar day)
+    if (!d.intro || d.intro.date !== todayStr()) d.intro = { date: todayStr(), count: 0 };
     for (const c of d.cards) {
       if (!c.id) c.id = rid();
       if (typeof c.front !== 'string') c.front = '';
@@ -387,8 +432,9 @@ function clozePlain(text) { return text.replace(/\{\{(.+?)\}\}/g, '[$1]'); }
 
 //// ---------- SM-2-ish scheduler ----------
 // grade: 0=again 1=hard 2=good 3=easy
-function schedule(card, grade) {
-  let { ease, interval, reps } = card;
+// A "sched" is {ease, interval, reps, due}. scheduleObj mutates it in place.
+function scheduleObj(s, grade) {
+  let { ease, interval, reps } = s;
   if (grade === 0) { reps = 0; interval = 0; ease = Math.max(1.3, ease - 0.2); }
   else {
     ease = Math.max(1.3, ease + (grade === 1 ? -0.15 : grade === 3 ? 0.15 : 0));
@@ -398,22 +444,67 @@ function schedule(card, grade) {
     else interval = Math.round(interval * ease * (grade === 1 ? 0.6 : grade === 3 ? 1.3 : 1));
     interval = Math.max(grade === 0 ? 0 : 1, interval);
   }
-  card.ease = ease; card.interval = interval; card.reps = reps;
-  // "again" / interval 0 => come back in ~1 min within this session feel; store +10min
-  card.due = now() + (interval === 0 ? 10 * 60 * 1000 : interval * DAY);
-  return card;
+  s.ease = ease; s.interval = interval; s.reps = reps;
+  // "again" / interval 0 => come back in ~10 min; otherwise interval days out
+  s.due = now() + (interval === 0 ? 10 * 60 * 1000 : interval * DAY);
+  return s;
 }
-function intervalLabel(card, grade) {
-  const tmp = { ...card };
-  schedule(tmp, grade);
-  if (tmp.interval === 0) return '<10m';
-  if (tmp.interval === 1) return '1d';
-  if (tmp.interval < 30) return tmp.interval + 'd';
-  if (tmp.interval < 365) return Math.round(tmp.interval/30) + 'mo';
-  return (tmp.interval/365).toFixed(1) + 'y';
+// forward-direction scheduler kept for compatibility
+function schedule(card, grade) { scheduleObj(card, grade); return card; }
+
+// reverse cards: each direction has its own schedule. 'f' = front→back, 'r' = back→front.
+const RKEYS = { ease: 'rEase', interval: 'rInterval', reps: 'rReps', due: 'rDue' };
+function getSched(card, dir) {
+  if (dir === 'r') return { ease: card.rEase ?? 2.5, interval: card.rInterval ?? 0, reps: card.rReps ?? 0, due: card.rDue ?? now() };
+  return { ease: card.ease, interval: card.interval, reps: card.reps, due: card.due };
 }
-const dueCards = (deck) => deck.cards.filter(c => c.due <= now());
-const allDue = () => state.decks.flatMap(d => d.cards.map(c => ({c, d}))).filter(x => x.c.due <= now());
+function setSched(card, dir, s) {
+  if (dir === 'r') { card.rEase = s.ease; card.rInterval = s.interval; card.rReps = s.reps; card.rDue = s.due; }
+  else { card.ease = s.ease; card.interval = s.interval; card.reps = s.reps; card.due = s.due; }
+}
+
+function fmtInterval(iv) {
+  if (iv === 0) return '<10m';
+  if (iv === 1) return '1d';
+  if (iv < 30) return iv + 'd';
+  if (iv < 365) return Math.round(iv / 30) + 'mo';
+  return (iv / 365).toFixed(1) + 'y';
+}
+function intervalLabel(card, grade) {           // forward-only (used in tests)
+  const tmp = { ...card }; scheduleObj(tmp, grade); return fmtInterval(tmp.interval);
+}
+function unitLabel(u, grade) {                   // direction-aware
+  const tmp = getSched(u.card, u.dir); scheduleObj(tmp, grade); return fmtInterval(tmp.interval);
+}
+
+//// ---------- review units (card × direction), honoring deck options ----------
+function deckUnits(deck) {                        // every studyable unit in a deck
+  const dirs = deck.opts && deck.opts.reverse === 'both' ? ['f', 'r'] : ['f'];
+  const units = [];
+  for (const c of deck.cards)
+    for (const dir of dirs) {
+      if (dir === 'r' && isCloze(c)) continue;     // cloze has no sensible reverse
+      units.push({ card: c, dir, deck });
+    }
+  return units;
+}
+function newBudget(deck) {
+  const used = deck.intro && deck.intro.date === todayStr() ? deck.intro.count : 0;
+  const lim = deck.opts ? deck.opts.newPerDay : 20;
+  return Math.max(0, lim - used);
+}
+function dueUnits(deck) {                         // due reviews + new cards within today's budget
+  let budget = newBudget(deck);
+  const reviews = [], news = [];
+  for (const u of deckUnits(deck)) {
+    const s = getSched(u.card, u.dir);
+    if (s.reps === 0) news.push(u);
+    else if (s.due <= now()) reviews.push(u);
+  }
+  return reviews.concat(news.slice(0, budget));
+}
+const allDueUnits = () => state.decks.flatMap(d => dueUnits(d));
+const dueCards = (deck) => dueUnits(deck);        // count helper (length used for pills)
 
 //// ---------- streak ----------
 function bumpStreak() {
@@ -474,27 +565,31 @@ function openDeck(id) {
 
 function renderDeckHome() {
   const d = currentDeck;
-  const due = dueCards(d).length;
+  const units = dueUnits(d);
+  const due = units.length;
+  const rev = d.opts.reverse === 'both' ? ' · ↔ reverse on' : '';
   $('#progBar').style.width = '0%';
   $('#counts').textContent = '';
   $('#studyBody').innerHTML = `
     <div class="done-card">
       <div class="big">${d.emoji}</div>
       <h2>${escapeHtml(d.name)}</h2>
-      <p>${d.cards.length} cards · <b>${due}</b> due right now</p>
+      <p>${d.cards.length} cards · <b>${due}</b> due right now${rev}${d.opts.typed ? ' · ⌨ typed' : ''}</p>
       <div class="row" style="justify-content:center; margin-top:18px;">
         ${due ? `<button class="btn pink" id="goStudy">Study ${due} card${due===1?'':'s'} ✦</button>` : `<button class="btn ghost" id="goStudy">Review anyway</button>`}
         <button class="btn mint" id="goAdd">＋ Add card</button>
         <button class="btn ghost" id="goImport">📥 Bulk import</button>
+        <button class="btn ghost" id="goOpts">⚙️ Options</button>
       </div>
     </div>
     <div class="manage">
       <h3>📚 Cards</h3>
       <div class="card-list" id="cardList"></div>
     </div>`;
-  $('#goStudy').onclick = () => startSession(due ? dueCards(d) : d.cards.slice());
+  $('#goStudy').onclick = () => startSession(due ? dueUnits(d) : deckUnits(d), d.opts.typed);
   $('#goAdd').onclick = () => openCardModal();
   $('#goImport').onclick = () => openImportCards();
+  $('#goOpts').onclick = () => openDeckOpts();
   const list = $('#cardList');
   if (!d.cards.length) list.innerHTML = `<div class="empty">No cards yet — add your first one! 🃏</div>`;
   d.cards.forEach(c => {
@@ -515,23 +610,38 @@ function renderDeckHome() {
   });
 }
 
-//// ---------- STUDY session ----------
+//// ---------- STUDY session (operates on units {card, dir, deck}) ----------
 let session = null;
-function startSession(cards) {
-  if (!cards.length) { palCheer(); return; }
-  // shuffle
-  cards = cards.slice().sort(() => Math.random() - .5);
-  session = { queue: cards, total: cards.length, done: 0, flipped: false };
+function startSession(units, typed) {
+  if (!units.length) { palCheer(); return; }
+  units = units.slice().sort(() => Math.random() - .5);
+  session = { queue: units, total: units.length, done: 0, flipped: false, typed: !!typed, checked: false };
   $('#home').classList.add('hidden');
   $('#study').classList.add('active');
   renderCard();
 }
 
 function startStudyAll() {
-  const due = allDue();
+  const due = allDueUnits();
   if (!due.length) { palCheer(); flash('Nothing due — go play! 🎉'); return; }
   currentDeck = null;
-  startSession(due.map(x => x.c));
+  startSession(due, false);
+}
+
+// what the prompt / answer are for a unit (handles reverse + cloze)
+function unitIsCloze(u) { return u.dir === 'f' && isCloze(u.card); }
+function unitPromptHtml(u) {
+  if (unitIsCloze(u)) return clozeFront(u.card.front);
+  return escapeHtml(u.dir === 'f' ? u.card.front : u.card.back);
+}
+function unitAnswerHtml(u) {
+  if (unitIsCloze(u)) return clozeBack(u.card.front) + (u.card.back ? `<div class="note">${escapeHtml(u.card.back)}</div>` : '');
+  return escapeHtml(u.dir === 'f' ? u.card.back : u.card.front);
+}
+function unitExpected(u) { return u.dir === 'f' ? u.card.back : u.card.front; } // plain, for typed check
+function normAns(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[.,!?;:'"()¿¡]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function renderCard() {
@@ -540,56 +650,91 @@ function renderCard() {
   $('#progBar').style.width = pct + '%';
   $('#counts').textContent = `${s.done}/${s.total}`;
   if (!s.queue.length) return finishSession();
-  const card = s.queue[0];
-  s.flipped = false;
-  const cloze = isCloze(card);
-  const frontHtml = cloze ? clozeFront(card.front) : escapeHtml(card.front);
-  const backHtml = cloze
-    ? clozeBack(card.front) + (card.back ? `<div class="note">${escapeHtml(card.back)}</div>` : '')
-    : escapeHtml(card.back);
+  const u = s.queue[0];
+  s.flipped = false; s.checked = false;
+  // typed mode applies to basic cards only (cloze stays flip-to-reveal)
+  const typed = s.typed && !unitIsCloze(u);
+  const corner = unitIsCloze(u) ? 'cloze' : (u.dir === 'r' ? 'reverse ↩' : 'front');
   $('#studyBody').innerHTML = `
     <div class="scene">
       <div class="flip" id="flip">
         <div class="face front">
-          <span class="corner">${cloze ? 'cloze' : 'front'}</span>
-          <div class="txt">${frontHtml}</div>
-          <div class="hint">tap card or press <b>space</b> to flip</div>
+          <span class="corner">${corner}</span>
+          <div class="txt">${unitPromptHtml(u)}</div>
+          <div class="hint">${typed ? 'type your answer below' : 'tap card or press <b>space</b> to flip'}</div>
         </div>
         <div class="face back">
           <span class="corner">back</span>
-          <div class="txt">${backHtml}</div>
+          <div class="txt">${unitAnswerHtml(u)}</div>
           <div class="hint">how well did you know it?</div>
         </div>
       </div>
     </div>
+    ${typed ? `
+    <div class="typed" id="typedArea">
+      <input id="typedInput" placeholder="Type the answer…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button class="btn grape" id="checkBtn">Check ✓</button>
+    </div>
+    <div class="verdict hidden" id="verdict"></div>` : ''}
     <div class="grades hidden" id="grades">
-      <button class="grade g-again" data-g="0"><span class="lab">Again</span><span class="when">${intervalLabel(card,0)}</span></button>
-      <button class="grade g-hard"  data-g="1"><span class="lab">Hard</span><span class="when">${intervalLabel(card,1)}</span></button>
-      <button class="grade g-good"  data-g="2"><span class="lab">Good</span><span class="when">${intervalLabel(card,2)}</span></button>
-      <button class="grade g-easy"  data-g="3"><span class="lab">Easy</span><span class="when">${intervalLabel(card,3)}</span></button>
+      <button class="grade g-again" data-g="0"><span class="lab">Again</span><span class="when">${unitLabel(u,0)}</span></button>
+      <button class="grade g-hard"  data-g="1"><span class="lab">Hard</span><span class="when">${unitLabel(u,1)}</span></button>
+      <button class="grade g-good"  data-g="2"><span class="lab">Good</span><span class="when">${unitLabel(u,2)}</span></button>
+      <button class="grade g-easy"  data-g="3"><span class="lab">Easy</span><span class="when">${unitLabel(u,3)}</span></button>
     </div>`;
-  const flip = $('#flip');
-  flip.onclick = doFlip;
+  $('#flip').onclick = doFlip;
   $('#grades').querySelectorAll('.grade').forEach(b => b.onclick = () => gradeCard(+b.dataset.g));
+  if (typed) {
+    $('#checkBtn').onclick = checkTyped;
+    setTimeout(() => $('#typedInput').focus(), 60);
+  }
+}
+
+function checkTyped() {
+  const s = session;
+  if (s.checked) return;
+  const u = s.queue[0];
+  const val = $('#typedInput').value;
+  const correct = val.trim() !== '' && normAns(val) === normAns(unitExpected(u));
+  s.checked = true; s.correct = correct;
+  const v = $('#verdict');
+  v.className = 'verdict ' + (correct ? 'good' : 'bad');
+  v.innerHTML = correct
+    ? '✓ Correct!'
+    : `✗ You wrote “${escapeHtml(val || '—')}” · answer: <b>${escapeHtml(unitExpected(u))}</b>`;
+  $('#typedArea').classList.add('hidden');
+  doFlip();
+  // nudge a suggested grade
+  setTimeout(() => {
+    const g = $('#grades');
+    if (g) g.querySelector(correct ? '.g-good' : '.g-again').classList.add('suggest');
+  }, 300);
 }
 
 function doFlip() {
   if (session.flipped) return;
   session.flipped = true;
   $('#flip').classList.add('flipped');
+  const ta = $('#typedArea'); if (ta) ta.classList.add('hidden');
   setTimeout(() => $('#grades').classList.remove('hidden'), 280);
 }
 
 function gradeCard(grade) {
   const s = session;
-  const card = s.queue.shift();
-  schedule(card, grade);
+  const u = s.queue.shift();
+  const wasNew = getSched(u.card, u.dir).reps === 0;
+  const sc = getSched(u.card, u.dir);
+  scheduleObj(sc, grade);
+  setSched(u.card, u.dir, sc);
+  // count a new card against today's budget once it graduates out of "new"
+  if (wasNew && grade >= 1 && u.deck) {
+    if (!u.deck.intro || u.deck.intro.date !== todayStr()) u.deck.intro = { date: todayStr(), count: 0 };
+    u.deck.intro.count++;
+  }
   bumpStreak();
-  // requeue "again" cards at the end of this session too
-  if (grade === 0) s.queue.push(card);
+  if (grade === 0) s.queue.push(u);   // requeue "again" within this session
   else s.done++;
   save();
-  // confetti on easy
   if (grade === 3) burst(8);
   palBounce();
   renderCard();
@@ -664,7 +809,8 @@ function openDeckModal() {
 $('#createDeck').onclick = () => {
   const name = $('#deckName').value.trim();
   if (!name) { $('#deckName').focus(); return; }
-  state.decks.push({ id: rid(), emoji: pickedEmoji, name, cards: [] });
+  state.decks.push({ id: rid(), emoji: pickedEmoji, name, cards: [],
+    opts: { newPerDay: 20, typed: false, reverse: 'off' }, intro: { date: todayStr(), count: 0 } });
   save(); $('#deckModal').classList.remove('open');
   burst(12); renderHome();
 };
@@ -729,6 +875,25 @@ $('#doImportCards').onclick = () => {
   flash(`Planted ${cards.length} card${cards.length === 1 ? '' : 's'} 🌱`);
 };
 
+//// ---------- deck options ----------
+function openDeckOpts() {
+  const o = currentDeck.opts;
+  $('#deckOptsTitle').textContent = `⚙️ ${currentDeck.emoji} ${currentDeck.name}`;
+  $('#optNewPerDay').value = o.newPerDay;
+  $('#optTyped').checked = o.typed;
+  $('#optReverse').checked = o.reverse === 'both';
+  $('#deckOptsModal').classList.add('open');
+}
+$('#saveDeckOpts').onclick = () => {
+  const o = currentDeck.opts;
+  const n = parseInt($('#optNewPerDay').value, 10);
+  o.newPerDay = Number.isFinite(n) && n >= 0 ? n : 20;
+  o.typed = $('#optTyped').checked;
+  o.reverse = $('#optReverse').checked ? 'both' : 'off';
+  save(); $('#deckOptsModal').classList.remove('open');
+  renderDeckHome(); flash('Options saved ⚙️');
+};
+
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
   document.querySelectorAll('.modal-bg').forEach(m => m.classList.remove('open'));
   if (currentDeck) renderDeckHome();
@@ -742,21 +907,19 @@ $('#studyAllBtn').onclick = startStudyAll;
 
 //// ---------- stats ----------
 function computeStats() {
-  const cards = state.decks.flatMap(d => d.cards);
-  const t = now();
-  const s = { total: cards.length, due: 0, neu: 0, learn: 0, mature: 0,
+  const noteTotal = state.decks.reduce((a, d) => a + d.cards.length, 0);
+  const units = state.decks.flatMap(d => deckUnits(d));   // forward + reverse review units
+  const s = { total: noteTotal, due: allDueUnits().length, neu: 0, learn: 0, mature: 0,
               reviews: (state.streak && state.streak.date === todayStr()) ? state.streak.count : 0 };
-  for (const c of cards) {
-    if (c.due <= t) s.due++;
-    if (c.reps === 0) s.neu++;
-    else if (c.interval >= 21) s.mature++;
-    else s.learn++;
-  }
   const fc = [0,0,0,0,0,0,0];
   const midnight = new Date(); midnight.setHours(0,0,0,0);
   const base = midnight.getTime();
-  for (const c of cards) {
-    const day = Math.floor((c.due - base) / DAY);
+  for (const u of units) {
+    const sc = getSched(u.card, u.dir);
+    if (sc.reps === 0) s.neu++;
+    else if (sc.interval >= 21) s.mature++;
+    else s.learn++;
+    const day = Math.floor((sc.due - base) / DAY);
     if (day < 0) fc[0]++;            // overdue → due today
     else if (day < 7) fc[day]++;
   }
@@ -832,7 +995,12 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (!session) return;
-  if (e.code === 'Space') { e.preventDefault(); session.flipped ? null : doFlip(); }
+  // typing the answer: Enter checks, other keys go to the input (no shortcuts)
+  if (e.target && e.target.id === 'typedInput') {
+    if (e.key === 'Enter') { e.preventDefault(); if (!session.checked) checkTyped(); }
+    return;
+  }
+  if (e.code === 'Space') { e.preventDefault(); if (!session.flipped) doFlip(); }
   if (session.flipped && ['1','2','3','4'].includes(e.key)) gradeCard(+e.key - 1);
 });
 

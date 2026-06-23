@@ -15,6 +15,12 @@ dependencies, no server. Just open it and study.
   cards, see per-deck "due" counts at a glance.
 - **Cloze deletions** — wrap any word in `{{double braces}}` and FlashPal blanks
   it on the front, revealing it on the back. Multiple blanks per card supported.
+- **Typed-answer mode** — per deck, type the answer and FlashPal checks it
+  (case-, accent- and punctuation-insensitive), then suggests a grade.
+- **Reverse cards** — per deck, add a back → front review for each basic card,
+  scheduled independently from the forward direction.
+- **Per-deck options** — a new-cards-per-day limit (so big decks don't bury you),
+  plus the typed and reverse toggles, all under ⚙️ Options.
 - **Bulk import** — paste many cards at once, split by **Tab**, `|`, or comma
   (cloze lines need no separator).
 - **Study sessions** — shuffled due queue, *Again* cards loop back within the
