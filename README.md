@@ -11,12 +11,21 @@ dependencies, no server. Just open it and study.
 - **Real spaced repetition** — an SM-2-style scheduler tracks each card's ease,
   interval and reps. Grade a card *Again / Hard / Good / Easy* and FlashPal shows
   the next review interval right on the button (`<10m`, `1d`, `3d`, months, years…).
-- **Decks & cards** — create decks with a mascot emoji, add/delete cards, see
-  per-deck "due" counts at a glance.
+- **Decks & cards** — create decks with a mascot emoji, add / **edit** / delete
+  cards, see per-deck "due" counts at a glance.
+- **Cloze deletions** — wrap any word in `{{double braces}}` and FlashPal blanks
+  it on the front, revealing it on the back. Multiple blanks per card supported.
+- **Bulk import** — paste many cards at once, split by **Tab**, `|`, or comma
+  (cloze lines need no separator).
 - **Study sessions** — shuffled due queue, *Again* cards loop back within the
   session, a progress bar, and "Study everything due" across all decks at once.
+- **Stats panel** — due / new / learning / mature counts, today's reviews, and a
+  7-day "reviews due" forecast chart.
+- **Backup & restore** — export your whole garden to a JSON file and import it
+  back on any device. No account, no cloud, no tracking.
+- **Dark mode** — a soft "night garden" theme, remembered across visits.
 - **Local persistence** — everything is saved to `localStorage`; your garden
-  survives reloads. No account, no cloud, no tracking.
+  survives reloads.
 - **Whimsy** — a 🦊 mascot that bounces when you grade, drifting background
   doodles, 3D card flips, confetti on *Easy* and on finishing, and a daily ⚡
   streak counter.

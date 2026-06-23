@@ -170,7 +170,53 @@
   @keyframes fall { to { transform: translateY(105vh) rotate(720deg); opacity: .9; } }
 
   .hidden { display: none !important; }
-  .streak { display: inline-flex; align-items: center; gap: 5px; background: #fff; padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow-sm); font-weight: 800; color: var(--pink-d); margin-left: auto; }
+  .streak { display: inline-flex; align-items: center; gap: 5px; background: #fff; padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow-sm); font-weight: 800; color: var(--pink-d); }
+
+  /* toolbar + icon buttons */
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .icon-btn { border: none; cursor: pointer; background: #fff; box-shadow: var(--shadow-sm); border-radius: 999px; width: 40px; height: 40px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: transform .12s; }
+  .icon-btn:hover { transform: translateY(-2px) scale(1.06) rotate(-3deg); }
+
+  /* cloze */
+  .cloze { color: var(--grape-d); font-weight: 800; background: #efe6ff; padding: 0 10px; border-radius: 8px; }
+  .cloze-rev { color: var(--mint-d); font-weight: 800; border-bottom: 3px solid var(--mint); }
+  .note { color: #b7a9cd; font-size: 1rem; font-weight: 600; margin-top: 14px; }
+
+  /* stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 12px; }
+  .stat { background: #f7f3ff; border-radius: 16px; padding: 14px 10px; text-align: center; }
+  .stat .n { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+  .stat .l { font-size: .76rem; color: #9a8bb0; font-weight: 700; margin-top: 4px; }
+  .stat.new .n { color: var(--sky); } .stat.learn .n { color: var(--sun); }
+  .stat.mature .n { color: var(--mint-d); } .stat.due .n { color: var(--pink-d); }
+  .fc-title { font-weight: 800; margin: 22px 0 6px; font-size: .95rem; }
+  .forecast { display: flex; align-items: flex-end; gap: 6px; height: 96px; }
+  .fbar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; }
+  .fbar .bar { width: 100%; background: linear-gradient(180deg, var(--pink), var(--grape)); border-radius: 8px 8px 4px 4px; min-height: 4px; transition: height .5s cubic-bezier(.5,1.6,.4,1); }
+  .fbar .v { font-size: .72rem; font-weight: 800; color: #8a7aa6; }
+  .fbar .d { font-size: .68rem; color: #b3a5c8; font-weight: 700; }
+  .modal p code { background: #efe6ff; padding: 1px 6px; border-radius: 6px; font-size: .82rem; }
+  .crow .edit { background: none; border: none; cursor: pointer; opacity: .4; font-size: 1rem; }
+  .crow .edit:hover { opacity: 1; }
+  .crow.cloze-row .q { color: var(--grape-d); }
+
+  /* dark mode — night garden */
+  body.dark {
+    --bg: #1d1833; --bg2: #15112a; --ink: #ece7f7; --card: #272142;
+    --grape: #9a82ec; --grape-d: #c3b1ff; --pink-d: #ff9ec8; --mint-d: #5fe0b0;
+    --shadow: 0 10px 30px rgba(0,0,0,.5); --shadow-sm: 0 4px 14px rgba(0,0,0,.4);
+  }
+  body.dark .tag, body.dark .deck .meta, body.dark .crow .a, body.dark .hint, body.dark .done-card p, body.dark .stat .l, body.dark .fbar .v { color: #a89cce; }
+  body.dark .btn.ghost { background: #322a52; color: #cdbcff; box-shadow: inset 0 0 0 2px #463c72; }
+  body.dark .icon-btn, body.dark .streak { background: #272142; }
+  body.dark .new-deck { background: #221d3c; border-color: #3a3160; color: #cdbcff; }
+  body.dark .field input, body.dark .field textarea { background: #1f1a38; border-color: #3a3160; color: var(--ink); }
+  body.dark .face.back { background: linear-gradient(180deg, #272142, #21283c); }
+  body.dark .progress { background: #322a52; }
+  body.dark .stat { background: #1f1a38; }
+  body.dark .cloze { background: #3a2f63; }
+  body.dark .badge, body.dark .modal p code { background: #3a2f63; color: #cdbcff; }
+  body.dark .emoji-pick button { background: #322a52; }
 </style>
 </head>
 <body>
@@ -178,7 +224,14 @@
 <div class="wrap">
   <header class="app">
     <div class="logo"><span class="mark pal" id="pal">🦊</span> FlashPal</div>
-    <div class="streak" id="streak" title="cards reviewed today">⚡ <span id="streakN">0</span></div>
+    <div class="toolbar">
+      <button class="icon-btn" id="statsBtn" title="Stats">📊</button>
+      <button class="icon-btn" id="exportBtn" title="Export backup">⬇️</button>
+      <button class="icon-btn" id="importBtn" title="Import backup">⬆️</button>
+      <button class="icon-btn" id="themeBtn" title="Toggle dark mode">🌙</button>
+      <div class="streak" id="streak" title="cards reviewed today">⚡ <span id="streakN">0</span></div>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" class="hidden" />
   </header>
   <p class="tag">A whimsical little memory garden — plant a card, water it daily, watch it bloom. 🌱</p>
 
@@ -225,19 +278,45 @@
 <!-- CARD MODAL -->
 <div class="modal-bg" id="cardModal">
   <div class="modal">
-    <h2>🃏 New card</h2>
+    <h2 id="cardModalTitle">🃏 New card</h2>
     <div class="field">
-      <label>Front (question)</label>
-      <textarea id="cardFront" rows="2" placeholder="What's on the front?"></textarea>
+      <label>Front (question) — wrap a word in <code>{{ }}</code> for a cloze blank</label>
+      <textarea id="cardFront" rows="2" placeholder="What's on the front?  ·  or: The {{mitochondria}} is the powerhouse of the cell"></textarea>
     </div>
     <div class="field">
-      <label>Back (answer)</label>
+      <label id="cardBackLabel">Back (answer)</label>
       <textarea id="cardBack" rows="2" placeholder="...and the answer?"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Done</button>
       <button class="btn mint" id="addCard">Add & keep going ↵</button>
     </div>
+  </div>
+</div>
+
+<!-- BULK IMPORT MODAL -->
+<div class="modal-bg" id="importCardsModal">
+  <div class="modal">
+    <h2>📥 Bulk import cards</h2>
+    <p style="color:#9a8bb0;font-size:.85rem;margin:-8px 0 14px">One card per line. Split front/back with a <b>Tab</b>, <code>|</code>, or comma. Use <code>{{…}}</code> for cloze blanks (back optional).</p>
+    <div class="field">
+      <textarea id="importText" rows="9" placeholder="Capital of France | Paris
+bonjour, hello
+The {{mitochondria}} is the powerhouse of the cell"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn mint" id="doImportCards">Import cards</button>
+    </div>
+  </div>
+</div>
+
+<!-- STATS MODAL -->
+<div class="modal-bg" id="statsModal">
+  <div class="modal" style="max-width:540px">
+    <h2>📊 Your garden stats</h2>
+    <div id="statsBody"></div>
+    <div class="modal-actions"><button class="btn grape" data-close>Lovely ✦</button></div>
   </div>
 </div>
 
@@ -295,6 +374,16 @@ function seed() {
 }
 function rid() { return Math.random().toString(36).slice(2, 10); }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+//// ---------- cloze ({{answer}} blanks) ----------
+const CLOZE_RE = /\{\{(.+?)\}\}/;
+function isCloze(card) { return CLOZE_RE.test(card.front); }
+// front side: blank out the answers
+function clozeFront(text) { return escapeHtml(text).replace(/\{\{(.+?)\}\}/g, '<span class="cloze">[ … ]</span>'); }
+// back side: reveal them
+function clozeBack(text) { return escapeHtml(text).replace(/\{\{(.+?)\}\}/g, (m, p1) => '<span class="cloze-rev">' + p1 + '</span>'); }
+// plain text for list rows (answers shown bracketed)
+function clozePlain(text) { return text.replace(/\{\{(.+?)\}\}/g, '[$1]'); }
 
 //// ---------- SM-2-ish scheduler ----------
 // grade: 0=again 1=hard 2=good 3=easy
@@ -396,6 +485,7 @@ function renderDeckHome() {
       <div class="row" style="justify-content:center; margin-top:18px;">
         ${due ? `<button class="btn pink" id="goStudy">Study ${due} card${due===1?'':'s'} ✦</button>` : `<button class="btn ghost" id="goStudy">Review anyway</button>`}
         <button class="btn mint" id="goAdd">＋ Add card</button>
+        <button class="btn ghost" id="goImport">📥 Bulk import</button>
       </div>
     </div>
     <div class="manage">
@@ -404,16 +494,22 @@ function renderDeckHome() {
     </div>`;
   $('#goStudy').onclick = () => startSession(due ? dueCards(d) : d.cards.slice());
   $('#goAdd').onclick = () => openCardModal();
+  $('#goImport').onclick = () => openImportCards();
   const list = $('#cardList');
   if (!d.cards.length) list.innerHTML = `<div class="empty">No cards yet — add your first one! 🃏</div>`;
   d.cards.forEach(c => {
     const overdue = c.due <= now();
+    const cloze = isCloze(c);
     const row = document.createElement('div');
-    row.className = 'crow';
-    row.innerHTML = `<span class="q">${escapeHtml(c.front)}</span>
-      <span class="a">${escapeHtml(c.back)}</span>
+    row.className = 'crow' + (cloze ? ' cloze-row' : '');
+    row.innerHTML = `<span class="q">${escapeHtml(cloze ? clozePlain(c.front) : c.front)}</span>
+      <span class="a">${escapeHtml(cloze ? (c.back || 'cloze') : c.back)}</span>
       <span class="badge">${overdue ? 'due' : 'rep '+c.reps}</span>
-      <button class="x" title="delete">✕</button>`;
+      <div class="row-actions">
+        <button class="edit" title="edit">✏️</button>
+        <button class="x" title="delete">✕</button>
+      </div>`;
+    row.querySelector('.edit').onclick = () => openCardModal(c);
     row.querySelector('.x').onclick = () => { d.cards = d.cards.filter(x => x.id !== c.id); save(); renderDeckHome(); };
     list.appendChild(row);
   });
@@ -446,17 +542,22 @@ function renderCard() {
   if (!s.queue.length) return finishSession();
   const card = s.queue[0];
   s.flipped = false;
+  const cloze = isCloze(card);
+  const frontHtml = cloze ? clozeFront(card.front) : escapeHtml(card.front);
+  const backHtml = cloze
+    ? clozeBack(card.front) + (card.back ? `<div class="note">${escapeHtml(card.back)}</div>` : '')
+    : escapeHtml(card.back);
   $('#studyBody').innerHTML = `
     <div class="scene">
       <div class="flip" id="flip">
         <div class="face front">
-          <span class="corner">front</span>
-          <div class="txt">${escapeHtml(card.front)}</div>
+          <span class="corner">${cloze ? 'cloze' : 'front'}</span>
+          <div class="txt">${frontHtml}</div>
           <div class="hint">tap card or press <b>space</b> to flip</div>
         </div>
         <div class="face back">
           <span class="corner">back</span>
-          <div class="txt">${escapeHtml(card.back)}</div>
+          <div class="txt">${backHtml}</div>
           <div class="hint">how well did you know it?</div>
         </div>
       </div>
@@ -568,8 +669,13 @@ $('#createDeck').onclick = () => {
   burst(12); renderHome();
 };
 
-function openCardModal() {
-  $('#cardFront').value = ''; $('#cardBack').value = '';
+let editingCard = null;
+function openCardModal(card) {
+  editingCard = card || null;
+  $('#cardFront').value = card ? card.front : '';
+  $('#cardBack').value = card ? card.back : '';
+  $('#cardModalTitle').textContent = card ? '✏️ Edit card' : '🃏 New card';
+  $('#addCard').textContent = card ? 'Save changes' : 'Add & keep going ↵';
   $('#cardModal').classList.add('open');
   setTimeout(() => $('#cardFront').focus(), 50);
 }
@@ -577,13 +683,51 @@ $('#addCard').onclick = addCardFn;
 function addCardFn() {
   const front = $('#cardFront').value.trim();
   const back = $('#cardBack').value.trim();
-  if (!front || !back) { flash('Both sides please! 🃏'); return; }
+  // back is optional for cloze cards (the blanks ARE the answer)
+  if (!front || (!back && !CLOZE_RE.test(front))) { flash('Add a front + back (or a {{cloze}} blank) 🃏'); return; }
+  if (editingCard) {
+    editingCard.front = front; editingCard.back = back;
+    save(); $('#cardModal').classList.remove('open');
+    editingCard = null; renderDeckHome(); flash('Card updated ✨'); return;
+  }
   currentDeck.cards.push({ id: rid(), front, back, ease: 2.5, interval: 0, reps: 0, due: now() });
   save();
   $('#cardFront').value = ''; $('#cardBack').value = '';
   $('#cardFront').focus();
   burst(5); flash('Card planted 🌱');
 }
+
+//// ---------- bulk import cards ----------
+function openImportCards() {
+  $('#importText').value = '';
+  $('#importCardsModal').classList.add('open');
+  setTimeout(() => $('#importText').focus(), 50);
+}
+function parseImport(text) {
+  const cards = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    let front, back = '';
+    if (line.includes('\t')) { const i = line.indexOf('\t'); front = line.slice(0, i); back = line.slice(i + 1); }
+    else if (line.includes('|')) { const i = line.indexOf('|'); front = line.slice(0, i); back = line.slice(i + 1); }
+    else if (line.includes(',') && !CLOZE_RE.test(line)) { const i = line.indexOf(','); front = line.slice(0, i); back = line.slice(i + 1); }
+    else { front = line; } // cloze or front-only
+    front = front.trim(); back = back.trim();
+    if (!front) continue;
+    if (!back && !CLOZE_RE.test(front)) continue; // skip incomplete basic cards
+    cards.push({ id: rid(), front, back, ease: 2.5, interval: 0, reps: 0, due: now() });
+  }
+  return cards;
+}
+$('#doImportCards').onclick = () => {
+  const cards = parseImport($('#importText').value);
+  if (!cards.length) { flash('No valid cards found 🤔'); return; }
+  currentDeck.cards.push(...cards);
+  save(); $('#importCardsModal').classList.remove('open');
+  burst(Math.min(30, cards.length * 3)); renderDeckHome();
+  flash(`Planted ${cards.length} card${cards.length === 1 ? '' : 's'} 🌱`);
+};
 
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
   document.querySelectorAll('.modal-bg').forEach(m => m.classList.remove('open'));
@@ -595,6 +739,89 @@ document.querySelectorAll('.modal-bg').forEach(m => m.onclick = e => { if (e.tar
 function goHome() { currentDeck = null; session = null; $('#study').classList.remove('active'); renderHome(); }
 $('#backBtn').onclick = goHome;
 $('#studyAllBtn').onclick = startStudyAll;
+
+//// ---------- stats ----------
+function computeStats() {
+  const cards = state.decks.flatMap(d => d.cards);
+  const t = now();
+  const s = { total: cards.length, due: 0, neu: 0, learn: 0, mature: 0,
+              reviews: (state.streak && state.streak.date === todayStr()) ? state.streak.count : 0 };
+  for (const c of cards) {
+    if (c.due <= t) s.due++;
+    if (c.reps === 0) s.neu++;
+    else if (c.interval >= 21) s.mature++;
+    else s.learn++;
+  }
+  const fc = [0,0,0,0,0,0,0];
+  const midnight = new Date(); midnight.setHours(0,0,0,0);
+  const base = midnight.getTime();
+  for (const c of cards) {
+    const day = Math.floor((c.due - base) / DAY);
+    if (day < 0) fc[0]++;            // overdue → due today
+    else if (day < 7) fc[day]++;
+  }
+  s.forecast = fc;
+  return s;
+}
+function openStats() {
+  const s = computeStats();
+  const max = Math.max(1, ...s.forecast);
+  const labels = ['Today','+1','+2','+3','+4','+5','+6'];
+  const bars = s.forecast.map((v,i) => `<div class="fbar"><div class="v">${v}</div><div class="bar" style="height:0%"></div><div class="d">${labels[i]}</div></div>`).join('');
+  $('#statsBody').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat due"><div class="n">${s.due}</div><div class="l">due now</div></div>
+      <div class="stat new"><div class="n">${s.neu}</div><div class="l">new</div></div>
+      <div class="stat learn"><div class="n">${s.learn}</div><div class="l">learning</div></div>
+      <div class="stat mature"><div class="n">${s.mature}</div><div class="l">mature</div></div>
+      <div class="stat"><div class="n">${s.total}</div><div class="l">total cards</div></div>
+      <div class="stat"><div class="n">${s.reviews}</div><div class="l">today's reviews</div></div>
+    </div>
+    <div class="fc-title">🌤️ Reviews due — next 7 days</div>
+    <div class="forecast">${bars}</div>`;
+  $('#statsModal').classList.add('open');
+  requestAnimationFrame(() => $('#statsBody').querySelectorAll('.bar').forEach((b,i) => b.style.height = Math.round((s.forecast[i]/max)*100) + '%'));
+}
+$('#statsBtn').onclick = openStats;
+
+//// ---------- export / import backup ----------
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'flashpal-backup-' + todayStr() + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  flash('Backup downloaded ⬇️');
+}
+$('#exportBtn').onclick = exportBackup;
+$('#importBtn').onclick = () => $('#importFile').click();
+$('#importFile').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data; try { data = JSON.parse(reader.result); } catch { flash("That file isn't valid JSON 🤔"); return; }
+    const norm = normalize(data);
+    if (!norm) { flash('Not a FlashPal backup 🤔'); return; }
+    if (!confirm('Replace your current garden with this backup? This overwrites all decks.')) return;
+    state = norm; save(); goHome();
+    burst(20); flash('Backup restored 🌷');
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+//// ---------- dark mode ----------
+const THEME_KEY = 'flashpal.theme';
+function applyTheme(t) {
+  document.body.classList.toggle('dark', t === 'dark');
+  $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+$('#themeBtn').onclick = () => {
+  const next = document.body.classList.contains('dark') ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next); applyTheme(next);
+};
+applyTheme(localStorage.getItem(THEME_KEY) || 'light');
 
 //// ---------- keyboard ----------
 document.addEventListener('keydown', e => {
