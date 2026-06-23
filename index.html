@@ -251,7 +251,30 @@ const todayStr = () => new Date().toISOString().slice(0,10);
 const now = () => Date.now();
 const DAY = 86400000;
 
-let state = load() || seed();
+let state = normalize(load()) || seed();
+
+// repair partial/legacy/hand-edited storage so the app never throws on bad shape
+function normalize(s) {
+  if (!s || !Array.isArray(s.decks)) return null;
+  if (!s.streak || typeof s.streak.count !== 'number' || typeof s.streak.date !== 'string')
+    s.streak = { date: todayStr(), count: 0 };
+  for (const d of s.decks) {
+    if (!Array.isArray(d.cards)) d.cards = [];
+    if (!d.id) d.id = rid();
+    if (typeof d.emoji !== 'string') d.emoji = '📚';
+    if (typeof d.name !== 'string') d.name = 'Untitled';
+    for (const c of d.cards) {
+      if (!c.id) c.id = rid();
+      if (typeof c.front !== 'string') c.front = '';
+      if (typeof c.back !== 'string') c.back = '';
+      if (typeof c.ease !== 'number') c.ease = 2.5;
+      if (typeof c.interval !== 'number') c.interval = 0;
+      if (typeof c.reps !== 'number') c.reps = 0;
+      if (typeof c.due !== 'number') c.due = now();
+    }
+  }
+  return s;
+}
 
 function seed() {
   const mk = (front, back) => ({ id: rid(), front, back, ease: 2.5, interval: 0, reps: 0, due: now() });
@@ -305,12 +328,12 @@ const allDue = () => state.decks.flatMap(d => d.cards.map(c => ({c, d}))).filter
 
 //// ---------- streak ----------
 function bumpStreak() {
-  if (state.streak.date !== todayStr()) state.streak = { date: todayStr(), count: 0 };
+  if (!state.streak || state.streak.date !== todayStr()) state.streak = { date: todayStr(), count: 0 };
   state.streak.count++;
   save(); renderStreak();
 }
 function renderStreak() {
-  if (state.streak.date !== todayStr()) state.streak = { date: todayStr(), count: 0 };
+  if (!state.streak || state.streak.date !== todayStr()) state.streak = { date: todayStr(), count: 0 };
   document.getElementById('streakN').textContent = state.streak.count;
 }
 
