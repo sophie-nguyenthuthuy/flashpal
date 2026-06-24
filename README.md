@@ -20,7 +20,13 @@ dependencies, no server. Just open it and study.
 - **Cloze deletions** — wrap any word in `{{double braces}}` and FlashPal blanks
   it on the front, revealing it on the back. Multiple blanks per card supported.
 - **Anki `.apkg` import** — drop in a real Anki export and FlashPal reads the
-  notes into a new deck (unzip + SQLite parsed in-browser; needs a connection).
+  notes into a new deck, **inlining packaged images & audio** as data URLs
+  (unzip + SQLite parsed in-browser; needs a connection).
+- **Leech detection** — cards you keep failing are auto-flagged `🪤 leech` and
+  suspended after N lapses (threshold in Settings; 0 disables).
+- **Suspend / resume** any card (⏸️/▶️) to take it out of rotation.
+- **Card info** — an ℹ️ popup per card: stability/difficulty/retrievability (or
+  ease/reps under SM-2), lapses, next-due, and a sparkline of recent grades.
 - **Search everything** — fuzzy search front/back/`#tag` across all decks; click
   a result to jump straight into editing it.
 - **Undo** — take back the last review mid-session (`u` or ⌘/Ctrl-Z); it restores

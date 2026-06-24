@@ -156,6 +156,21 @@
   .opt-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--grape); cursor: pointer; }
   .opt-check span b { display: block; font-size: .95rem; }
   .opt-check span small { color: #9a8bb0; font-weight: 600; }
+  /* card info + sparkline */
+  .ci-front { font-weight: 700; font-size: 1.1rem; margin-bottom: 12px; }
+  .ci-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin-bottom: 8px; }
+  .ci-k { color: #9a8bb0; font-weight: 700; font-size: .85rem; }
+  .ci-v { font-weight: 700; font-size: .9rem; text-align: right; }
+  .spark { background: #f7f3ff; border-radius: 14px; padding: 6px; }
+  body.dark .spark { background: #1f1a38; }
+  /* suspended / leech */
+  .crow.suspended { opacity: .6; }
+  .crow .badge.off { background: #f0e9f5; color: #b0a3c4; }
+  body.dark .crow .badge.off { background: #2b2547; color: #8a7daa; }
+  .tagchip.leech { background: #ffe2cf; color: #c4622a; }
+  body.dark .tagchip.leech { background: #4a2f1f; color: #ffb892; }
+  .crow .info, .crow .susp { background: none; border: none; cursor: pointer; opacity: .4; font-size: .95rem; }
+  .crow .info:hover, .crow .susp:hover { opacity: 1; }
   .search-results { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
   .sresult { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: #f7f3ff; cursor: pointer; }
   .sresult:hover { background: #efe6ff; }
@@ -406,6 +421,15 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
   </div>
 </div>
 
+<!-- CARD INFO MODAL -->
+<div class="modal-bg" id="cardInfoModal">
+  <div class="modal" style="max-width:500px">
+    <h2>ℹ️ Card info</h2>
+    <div id="cardInfoBody"></div>
+    <div class="modal-actions"><button class="btn grape" data-close>Close</button></div>
+  </div>
+</div>
+
 <!-- SEARCH MODAL -->
 <div class="modal-bg" id="searchModal">
   <div class="modal" style="max-width:560px">
@@ -430,6 +454,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
     <div class="field" id="retField">
       <label>Target retention — <b id="retVal">90%</b> <small>(higher = more reviews)</small></label>
       <input id="optRetention" type="range" min="70" max="97" step="1" />
+    </div>
+    <div class="field">
+      <label>Leech threshold <small>(lapses before a card is flagged & suspended; 0 = off)</small></label>
+      <input id="optLeech" type="number" min="0" max="99" />
     </div>
     <div class="modal-actions"><button class="btn grape" data-close>Done</button></div>
   </div>
@@ -486,6 +514,7 @@ function normalize(s) {
   if (s.settings.scheduler !== 'sm2') s.settings.scheduler = 'fsrs';
   if (typeof s.settings.retention !== 'number' || s.settings.retention < 0.7 || s.settings.retention > 0.99)
     s.settings.retention = 0.9;
+  if (typeof s.settings.leech !== 'number' || s.settings.leech < 0) s.settings.leech = 8;
   for (const d of s.decks) {
     if (!Array.isArray(d.cards)) d.cards = [];
     if (!d.id) d.id = rid();
@@ -507,6 +536,9 @@ function normalize(s) {
       if (typeof c.reps !== 'number') c.reps = 0;
       if (typeof c.due !== 'number') c.due = now();
       if (!Array.isArray(c.tags)) c.tags = [];
+      if (typeof c.lapses !== 'number') c.lapses = 0;
+      if (typeof c.suspended !== 'boolean') c.suspended = false;
+      if (!Array.isArray(c.log)) c.log = [];
     }
   }
   return s;
@@ -656,11 +688,13 @@ function unitLabel(u, grade) {                   // direction-aware
 function deckUnits(deck) {                        // every studyable unit in a deck
   const dirs = deck.opts && deck.opts.reverse === 'both' ? ['f', 'r'] : ['f'];
   const units = [];
-  for (const c of deck.cards)
+  for (const c of deck.cards) {
+    if (c.suspended) continue;                     // suspended/leech cards skip study
     for (const dir of dirs) {
       if (dir === 'r' && isCloze(c)) continue;     // cloze has no sensible reverse
       units.push({ card: c, dir, deck });
     }
+  }
   return units;
 }
 function newBudget(deck) {
@@ -837,16 +871,26 @@ function renderDeckHome() {
   shown.forEach(c => {
     const overdue = c.due <= now();
     const cloze = isCloze(c);
+    const isLeech = (c.tags || []).includes('leech');
     const row = document.createElement('div');
-    row.className = 'crow' + (cloze ? ' cloze-row' : '');
-    const tagChips = (c.tags || []).map(t => `<span class="tagchip">${escapeHtml(t)}</span>`).join('');
+    row.className = 'crow' + (cloze ? ' cloze-row' : '') + (c.suspended ? ' suspended' : '');
+    const tagChips = (c.tags || []).map(t => `<span class="tagchip${t === 'leech' ? ' leech' : ''}">${t === 'leech' ? '🪤 ' : ''}${escapeHtml(t)}</span>`).join('');
+    const badge = c.suspended ? '⏸ off' : (overdue ? 'due' : 'rep ' + c.reps);
     row.innerHTML = `<span class="q">${escapeHtml(plainText(c.front))}</span>
       <span class="a">${escapeHtml(cloze ? (c.back ? plainText(c.back) : 'cloze') : plainText(c.back))} ${tagChips}</span>
-      <span class="badge">${overdue ? 'due' : 'rep '+c.reps}</span>
+      <span class="badge${c.suspended ? ' off' : ''}">${badge}</span>
       <div class="row-actions">
+        <button class="info" title="card info">ℹ️</button>
+        <button class="susp" title="${c.suspended ? 'resume' : 'suspend'}">${c.suspended ? '▶️' : '⏸️'}</button>
         <button class="edit" title="edit">✏️</button>
         <button class="x" title="delete">✕</button>
       </div>`;
+    row.querySelector('.info').onclick = () => openCardInfo(c, d);
+    row.querySelector('.susp').onclick = () => {
+      c.suspended = !c.suspended;
+      if (!c.suspended && isLeech) c.tags = c.tags.filter(t => t !== 'leech'); // resuming clears the leech flag
+      save(); renderDeckHome();
+    };
     row.querySelector('.edit').onclick = () => openCardModal(c);
     row.querySelector('.x').onclick = () => { d.cards = d.cards.filter(x => x.id !== c.id); save(); renderDeckHome(); };
     list.appendChild(row);
@@ -966,26 +1010,43 @@ function doFlip() {
 function gradeCard(grade) {
   const s = session;
   const u = s.queue[0];
-  const prevSched = getSched(u.card, u.dir);
+  const card = u.card;
+  const prevSched = getSched(card, u.dir);
   const wasNew = prevSched.reps === 0;
-  // snapshot for undo (queue + counters + this card's schedule + deck intro)
+  // snapshot for undo (queue + counters + schedule + deck intro + leech/log state)
   (s.undoStack = s.undoStack || []).push({
     unit: u, dir: u.dir, deck: u.deck, prevSched,
     queueBefore: s.queue.slice(), doneBefore: s.done,
     introBefore: u.deck && u.deck.intro ? { ...u.deck.intro } : null,
+    lapsesBefore: card.lapses || 0, suspendedBefore: !!card.suspended,
+    tagsBefore: (card.tags || []).slice(), logLenBefore: (card.log || []).length,
   });
   s.queue.shift();
-  const sc = getSched(u.card, u.dir);
+  const sc = getSched(card, u.dir);
   scheduleObj(sc, grade);
-  setSched(u.card, u.dir, sc);
+  setSched(card, u.dir, sc);
+  // review log (capped)
+  (card.log = card.log || []).push({ t: now(), g: grade, dir: u.dir });
+  if (card.log.length > 50) card.log = card.log.slice(-50);
+  // lapse = failing a card that was already learned
+  let becameLeech = false;
+  if (grade === 0 && prevSched.reps > 0) {
+    card.lapses = (card.lapses || 0) + 1;
+    const thr = state.settings.leech || 8;
+    if (thr > 0 && card.lapses >= thr && !(card.tags || []).includes('leech')) {
+      card.tags = [...(card.tags || []), 'leech'];
+      card.suspended = true; becameLeech = true;
+    }
+  }
   // count a new card against today's budget once it graduates out of "new"
   if (wasNew && grade >= 1 && u.deck) {
     if (!u.deck.intro || u.deck.intro.date !== todayStr()) u.deck.intro = { date: todayStr(), count: 0 };
     u.deck.intro.count++;
   }
   bumpStreak();
-  if (grade === 0) s.queue.push(u);   // requeue "again" within this session
-  else s.done++;
+  if (becameLeech) { flash('🪤 Leech! This card was suspended — try rewording it.'); }
+  else if (grade === 0) s.queue.push(u);   // requeue "again" within this session (unless suspended)
+  if (grade !== 0 || becameLeech) s.done++;
   save();
   if (grade === 3) burst(8);
   palBounce();
@@ -996,8 +1057,11 @@ function undoLast() {
   const s = session;
   if (!s || !s.undoStack || !s.undoStack.length) return;
   const e = s.undoStack.pop();
-  setSched(e.unit.card, e.dir, e.prevSched);
+  const card = e.unit.card;
+  setSched(card, e.dir, e.prevSched);
   if (e.deck && e.introBefore) e.deck.intro = e.introBefore;
+  card.lapses = e.lapsesBefore; card.suspended = e.suspendedBefore;
+  card.tags = e.tagsBefore; if (card.log) card.log.length = e.logLenBefore;
   s.queue = e.queueBefore;
   s.done = e.doneBefore;
   unbumpStreak();
@@ -1332,23 +1396,55 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
-// HTML field → plain text (with our media markup for images/sounds we can inline)
-function ankiStripHtml(html) {
+const ANKI_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4' };
+function bytesToB64(u8) { let s = '', CH = 0x8000; for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s); }
+function decodeEntity(s) { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; }
+// build filename → data URL map from the package's media manifest (size-capped)
+function buildMediaMap(files) {
+  const map = {};
+  if (!files['media']) return map;
+  let manifest;
+  try { manifest = JSON.parse(new TextDecoder().decode(files['media'])); } catch { return map; }
+  let budget = 4 * 1024 * 1024;
+  for (const [idx, name] of Object.entries(manifest)) {
+    const bytes = files[idx];
+    if (!bytes) continue;
+    const ext = String(name).split('.').pop().toLowerCase();
+    const mime = ANKI_MIME[ext];
+    if (!mime || bytes.length > 600 * 1024 || bytes.length > budget) continue;
+    budget -= bytes.length;
+    map[name] = `data:${mime};base64,${bytesToB64(bytes)}`;
+  }
+  return map;
+}
+// HTML field → text, inlining any media we have (mediaMap: filename → data URL)
+function ankiStripHtml(html, media) {
+  media = media || {};
   let s = String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n');
-  s = s.replace(/<img[^>]*>/gi, '🖼').replace(/\[sound:[^\]]+\]/gi, '🔊').replace(/<[^>]+>/g, '');
+  s = s.replace(/<img\b[^>]*>/gi, tag => {
+    const m = tag.match(/\bsrc\s*=\s*["']?([^"'>\s]+)/i);
+    const name = m ? decodeEntity(m[1]) : null;
+    const url = name && (media[name] || media[decodeURIComponent(name)]);
+    return url ? `![](${url})` : '🖼';
+  });
+  s = s.replace(/\[sound:([^\]]+)\]/gi, (m, name) => {
+    const url = media[name] || media[decodeURIComponent(name)];
+    return url ? `@[audio](${url})` : '🔊';
+  });
+  s = s.replace(/<[^>]+>/g, '');
   const ta = document.createElement('textarea'); ta.innerHTML = s;
   return ta.value.replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 // pure: rows of {flds, tags} → FlashPal card objects
-function notesToCards(rows) {
+function notesToCards(rows, media) {
   const cards = [];
   for (const r of rows) {
     const fields = String(r.flds || '').split('');
-    const front = ankiStripHtml(fields[0] || '');
-    const back = ankiStripHtml(fields.slice(1).join(' · ') || '');
+    const front = ankiStripHtml(fields[0] || '', media);
+    const back = ankiStripHtml(fields.slice(1).join(' · ') || '', media);
     if (!front && !back) continue;
     const tags = String(r.tags || '').split(/\s+/).map(t => t.trim()).filter(Boolean);
-    cards.push({ id: rid(), front: front || '(blank)', back, tags, ease: 2.5, interval: 0, reps: 0, due: now() });
+    cards.push({ id: rid(), front: front || '(blank)', back, tags, lapses: 0, suspended: false, log: [], ease: 2.5, interval: 0, reps: 0, due: now() });
   }
   return cards;
 }
@@ -1373,7 +1469,8 @@ async function importApkg(file) {
     if (!res.length) { flash('No notes found in that package 🤔'); return; }
     const cols = res[0].columns;
     const rows = res[0].values.map(v => ({ flds: v[cols.indexOf('flds')], tags: v[cols.indexOf('tags')] }));
-    const cards = notesToCards(rows);
+    const media = buildMediaMap(files);
+    const cards = notesToCards(rows, media);
     if (!cards.length) { flash('No importable cards found 🤔'); return; }
     const deckName = file.name.replace(/\.(apkg|colpkg)$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) || 'Imported';
     state.decks.push({ id: rid(), emoji: '📦', name: deckName, cards,
@@ -1405,7 +1502,13 @@ function renderSettings() {
   $('#retField').style.display = state.settings.scheduler === 'fsrs' ? '' : 'none';
   $('#optRetention').value = Math.round(state.settings.retention * 100);
   $('#retVal').textContent = Math.round(state.settings.retention * 100) + '%';
+  $('#optLeech').value = state.settings.leech;
 }
+$('#optLeech') && ($('#optLeech').onchange = e => {
+  const n = parseInt(e.target.value, 10);
+  state.settings.leech = Number.isFinite(n) && n >= 0 ? n : 8;
+  e.target.value = state.settings.leech; save();
+});
 $('#settingsBtn').onclick = () => { renderSettings(); $('#settingsModal').classList.add('open'); };
 $('#schedSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   state.settings.scheduler = b.dataset.sched; save(); renderSettings();
@@ -1414,6 +1517,52 @@ $('#optRetention').oninput = (e) => {
   state.settings.retention = (+e.target.value) / 100;
   $('#retVal').textContent = e.target.value + '%'; save();
 };
+
+//// ---------- card info + grade sparkline ----------
+const GRADE_NAMES = ['Again', 'Hard', 'Good', 'Easy'];
+const GRADE_COLORS = ['#ff5d6c', '#ff9d4d', '#38b886', '#6f8bff'];
+function sparkline(log) {
+  if (!log || !log.length) return `<div class="empty" style="padding:14px">No reviews yet 🌱</div>`;
+  const pts = log.slice(-24);
+  const W = 440, H = 70, pad = 10;
+  const step = pts.length > 1 ? (W - 2 * pad) / (pts.length - 1) : 0;
+  const y = g => H - pad - (g / 3) * (H - 2 * pad);
+  let path = '', dots = '';
+  pts.forEach((e, i) => {
+    const x = pad + i * step, yy = y(e.g);
+    path += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + yy.toFixed(1) + ' ';
+    dots += `<circle cx="${x.toFixed(1)}" cy="${yy.toFixed(1)}" r="4" fill="${GRADE_COLORS[e.g]}"><title>${GRADE_NAMES[e.g]}${e.dir === 'r' ? ' (reverse)' : ''}</title></circle>`;
+  });
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="100%"><path d="${path}" fill="none" stroke="#cdbfe6" stroke-width="2"/>${dots}</svg>`;
+}
+function openCardInfo(card, deck) {
+  const f = getSched(card, 'f');
+  const fsrs = state.settings.scheduler === 'fsrs';
+  const rows = [];
+  rows.push(['Deck', `${deck.emoji} ${escapeHtml(deck.name)}`]);
+  rows.push(['Status', card.suspended ? '⏸ suspended' : (f.reps === 0 ? '🌱 new' : f.interval >= 21 ? '🌳 mature' : '🌿 learning')]);
+  rows.push(['Reviews', String((card.log || []).length)]);
+  rows.push(['Lapses', `${card.lapses || 0}${(card.tags || []).includes('leech') ? ' · 🪤 leech' : ''}`]);
+  if (fsrs && f.s != null) {
+    rows.push(['Stability', f.s.toFixed(1) + ' d']);
+    rows.push(['Difficulty', f.d.toFixed(1) + ' / 10']);
+    rows.push(['Retrievability', Math.round(fsrsR(f.last ? Math.max(0, (now() - f.last) / DAY) : 0, f.s) * 100) + '%']);
+  } else {
+    rows.push(['Ease', (f.ease ?? 2.5).toFixed(2)]);
+    rows.push(['Reps', String(f.reps)]);
+  }
+  rows.push(['Interval', fmtInterval(f.interval)]);
+  rows.push(['Next due', f.reps === 0 ? 'new' : new Date(f.due).toLocaleDateString()]);
+  if (deck.opts.reverse === 'both' && !isCloze(card)) {
+    const r = getSched(card, 'r');
+    rows.push(['Reverse', `${fmtInterval(r.interval)} · ${r.reps === 0 ? 'new' : 'rep ' + r.reps}`]);
+  }
+  $('#cardInfoBody').innerHTML =
+    `<div class="ci-front">${renderRich(card.front, false)}</div>
+     <div class="ci-grid">${rows.map(([k, v]) => `<div class="ci-k">${k}</div><div class="ci-v">${v}</div>`).join('')}</div>
+     <div class="fc-title">Recent grades</div>${sparkline(card.log)}`;
+  $('#cardInfoModal').classList.add('open');
+}
 
 //// ---------- global search ----------
 $('#searchBtn').onclick = () => {
