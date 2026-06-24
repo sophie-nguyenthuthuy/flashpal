@@ -179,6 +179,19 @@
   .sresult .sr-front { font-weight: 700; }
   .field select { width: 100%; border: 2px solid #ece3ff; border-radius: 14px; padding: 12px 14px; font-family: inherit; font-size: 1rem; background: #fbf9ff; color: var(--ink); }
   body.dark .field select { background: #1f1a38; border-color: #3a3160; }
+  /* custom study options */
+  .cs-opt { display: block; width: 100%; text-align: left; border: 2px solid #ece3ff; background: #fbf9ff; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; font-family: inherit; transition: all .12s; }
+  .cs-opt:hover { border-color: var(--grape); transform: translateY(-2px); }
+  .cs-opt b { display: block; font-size: 1rem; color: var(--ink); }
+  .cs-opt small { color: #9a8bb0; font-weight: 600; }
+  .cs-opt input { font-family: inherit; }
+  body.dark .cs-opt { background: #1f1a38; border-color: #3a3160; }
+  /* cheatsheet */
+  .cheat { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; align-items: center; margin-bottom: 6px; }
+  .cheat > div:nth-child(odd) { text-align: right; white-space: nowrap; }
+  .cheat > div:nth-child(even) { color: #6f6088; font-weight: 600; font-size: .92rem; }
+  kbd { display: inline-block; background: #fff; border: 1px solid #d9ccf0; border-bottom-width: 2px; border-radius: 7px; padding: 2px 8px; font: 600 .82rem ui-monospace, monospace; color: var(--grape-d); margin: 0 1px; }
+  body.dark kbd { background: #2b2547; border-color: #463c72; }
   .seg { display: flex; gap: 8px; }
   .seg button { flex: 1; border: 2px solid #ece3ff; background: #fbf9ff; color: var(--ink); border-radius: 14px; padding: 12px; font-family: inherit; font-weight: 800; cursor: pointer; transition: all .12s; }
   .seg button small { font-weight: 600; color: #9a8bb0; }
@@ -314,6 +327,7 @@
       <button class="icon-btn" id="exportBtn" title="Export backup">⬇️</button>
       <button class="icon-btn" id="importBtn" title="Import backup or Anki .apkg">⬆️</button>
       <button class="icon-btn" id="themeBtn" title="Toggle dark mode">🌙</button>
+      <button class="icon-btn" id="helpBtn" title="Keyboard shortcuts (?)">⌨️</button>
       <div class="streak" id="streak" title="cards reviewed today">⚡ <span id="streakN">0</span></div>
     </div>
     <input type="file" id="importFile" accept="application/json,.json,.apkg,.colpkg" class="hidden" />
@@ -334,6 +348,7 @@
       <button class="btn ghost sm" id="backBtn">← back</button>
       <div class="progress"><div id="progBar"></div></div>
       <span class="counts" id="counts"></span>
+      <button class="btn ghost sm hidden" id="speakBtn" title="Speak (s)">🔊</button>
       <button class="btn ghost sm hidden" id="undoBtn">↩ undo</button>
     </div>
     <div id="studyBody"></div>
@@ -421,6 +436,35 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
   </div>
 </div>
 
+<!-- CUSTOM STUDY MODAL -->
+<div class="modal-bg" id="customModal">
+  <div class="modal">
+    <h2>🎯 Custom study</h2>
+    <p style="color:#9a8bb0;font-size:.85rem;margin:-8px 0 14px">Extra practice that won't disturb your normal schedule (except “study ahead”).</p>
+    <button class="cs-opt" id="csAhead"><b>⏩ Study ahead</b><small>Pull in cards due within <input id="csDays" type="number" min="1" max="30" value="3" style="width:46px" /> days — these <i>do</i> reschedule.</small></button>
+    <button class="cs-opt" id="csCram"><b>🔁 Cram all cards</b><small>Run through every card; schedule stays put.</small></button>
+    <button class="cs-opt" id="csLapsed"><b>🩹 Practice lapsed & leeches</b><small>Only cards you've failed before; schedule stays put.</small></button>
+    <div class="modal-actions"><button class="btn ghost" data-close>Cancel</button></div>
+  </div>
+</div>
+
+<!-- CHEATSHEET MODAL -->
+<div class="modal-bg" id="cheatModal">
+  <div class="modal">
+    <h2>⌨️ Keyboard shortcuts</h2>
+    <div class="cheat">
+      <div><kbd>Space</kbd></div><div>Flip the card</div>
+      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></div><div>Grade Again / Hard / Good / Easy</div>
+      <div><kbd>Enter</kbd></div><div>Check typed answer</div>
+      <div><kbd>S</kbd></div><div>Speak the current side aloud</div>
+      <div><kbd>U</kbd> / <kbd>⌘Z</kbd></div><div>Undo last review</div>
+      <div><kbd>?</kbd></div><div>Open this cheatsheet</div>
+      <div><kbd>Esc</kbd></div><div>Close a dialog</div>
+    </div>
+    <div class="modal-actions"><button class="btn grape" data-close>Got it ✦</button></div>
+  </div>
+</div>
+
 <!-- CARD INFO MODAL -->
 <div class="modal-bg" id="cardInfoModal">
   <div class="modal" style="max-width:500px">
@@ -458,6 +502,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
     <div class="field">
       <label>Leech threshold <small>(lapses before a card is flagged & suspended; 0 = off)</small></label>
       <input id="optLeech" type="number" min="0" max="99" />
+    </div>
+    <div class="field" id="speakField">
+      <label class="opt-check"><input id="optAutoSpeak" type="checkbox" />
+        <span><b>🔊 Auto-speak cards</b><small>Read the front aloud on show and the answer on flip (text-to-speech).</small></span></label>
     </div>
     <div class="modal-actions"><button class="btn grape" data-close>Done</button></div>
   </div>
@@ -515,6 +563,7 @@ function normalize(s) {
   if (typeof s.settings.retention !== 'number' || s.settings.retention < 0.7 || s.settings.retention > 0.99)
     s.settings.retention = 0.9;
   if (typeof s.settings.leech !== 'number' || s.settings.leech < 0) s.settings.leech = 8;
+  if (typeof s.settings.autoSpeak !== 'boolean') s.settings.autoSpeak = false;
   for (const d of s.decks) {
     if (!Array.isArray(d.cards)) d.cards = [];
     if (!d.id) d.id = rid();
@@ -832,6 +881,7 @@ function renderDeckHome() {
       <div class="row" style="justify-content:center; margin-top:18px;">
         ${due ? `<button class="btn pink" id="goStudy">Study ${due} card${due===1?'':'s'} ✦</button>` : `<button class="btn ghost" id="goStudy">Review anyway</button>`}
         <button class="btn mint" id="goAdd">＋ Add card</button>
+        <button class="btn ghost" id="goCustom">🎯 Custom study</button>
         <button class="btn ghost" id="goImport">📥 Bulk import</button>
         <button class="btn ghost" id="goOpts">⚙️ Options</button>
       </div>
@@ -843,6 +893,7 @@ function renderDeckHome() {
     </div>`;
   $('#goStudy').onclick = () => startSession(due ? dueUnits(d) : deckUnits(d), d.opts.typed);
   $('#goAdd').onclick = () => openCardModal();
+  $('#goCustom').onclick = () => openCustomStudy();
   $('#goImport').onclick = () => openImportCards();
   $('#goOpts').onclick = () => openDeckOpts();
 
@@ -899,10 +950,10 @@ function renderDeckHome() {
 
 //// ---------- STUDY session (operates on units {card, dir, deck}) ----------
 let session = null;
-function startSession(units, typed) {
-  if (!units.length) { palCheer(); return; }
+function startSession(units, typed, peek) {
+  if (!units.length) { palCheer(); flash('Nothing to study here 🌱'); return; }
   units = units.slice().sort(() => Math.random() - .5);
-  session = { queue: units, total: units.length, done: 0, flipped: false, typed: !!typed, checked: false };
+  session = { queue: units, total: units.length, done: 0, flipped: false, typed: !!typed, checked: false, peek: !!peek };
   $('#home').classList.add('hidden');
   $('#study').classList.add('active');
   renderCard();
@@ -914,6 +965,22 @@ function startStudyAll() {
   currentDeck = null;
   startSession(due, false);
 }
+
+//// ---------- text-to-speech ----------
+const ttsOn = () => 'speechSynthesis' in window;
+function speak(text) {
+  if (!ttsOn() || !text) return;
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(String(text).replace(/\[ … \]/g, ' blank ').trim());
+  utt.rate = 0.98;
+  speechSynthesis.speak(utt);
+}
+function speakCurrent() {
+  if (!session) return;
+  const el = $(session.flipped ? '.face.back .txt' : '.face.front .txt');
+  if (el) speak(el.textContent);
+}
+function stopSpeech() { if (ttsOn()) speechSynthesis.cancel(); }
 
 // what the prompt / answer are for a unit (handles reverse + cloze)
 function unitIsCloze(u) { return u.dir === 'f' && isCloze(u.card); }
@@ -976,6 +1043,8 @@ function renderCard() {
     $('#checkBtn').onclick = checkTyped;
     setTimeout(() => $('#typedInput').focus(), 60);
   }
+  $('#speakBtn').classList.toggle('hidden', !ttsOn());
+  if (state.settings.autoSpeak && ttsOn() && !typed) speak($('.face.front .txt').textContent);
 }
 
 function checkTyped() {
@@ -1005,12 +1074,21 @@ function doFlip() {
   $('#flip').classList.add('flipped');
   const ta = $('#typedArea'); if (ta) ta.classList.add('hidden');
   setTimeout(() => $('#grades').classList.remove('hidden'), 280);
+  if (state.settings.autoSpeak && ttsOn()) speak($('.face.back .txt').textContent);
 }
 
 function gradeCard(grade) {
   const s = session;
   const u = s.queue[0];
   const card = u.card;
+  // peek/cram mode: navigate only, never touch the schedule, log, lapses or streak
+  if (s.peek) {
+    (s.undoStack = s.undoStack || []).push({ peek: true, queueBefore: s.queue.slice(), doneBefore: s.done });
+    s.queue.shift();
+    if (grade === 0) s.queue.push(u); else s.done++;
+    if (grade === 3) burst(8);
+    palBounce(); renderCard(); return;
+  }
   const prevSched = getSched(card, u.dir);
   const wasNew = prevSched.reps === 0;
   // snapshot for undo (queue + counters + schedule + deck intro + leech/log state)
@@ -1057,6 +1135,7 @@ function undoLast() {
   const s = session;
   if (!s || !s.undoStack || !s.undoStack.length) return;
   const e = s.undoStack.pop();
+  if (e.peek) { s.queue = e.queueBefore; s.done = e.doneBefore; flash('Undid ↩'); renderCard(); return; }
   const card = e.unit.card;
   setSched(card, e.dir, e.prevSched);
   if (e.deck && e.introBefore) e.deck.intro = e.introBefore;
@@ -1073,14 +1152,16 @@ function undoLast() {
 function finishSession() {
   burst(40);
   palCheer();
-  $('#undoBtn').classList.add('hidden');
+  stopSpeech();
+  $('#undoBtn').classList.add('hidden'); $('#speakBtn').classList.add('hidden');
+  const peek = session.peek;
   const back = currentDeck ? `back to ${escapeHtml(currentDeck.name)}` : 'back to decks';
   $('#progBar').style.width = '100%';
   $('#studyBody').innerHTML = `
     <div class="done-card">
-      <div class="big">🎉</div>
-      <h2>Garden watered!</h2>
-      <p>You reviewed <b>${session.total}</b> card${session.total===1?'':'s'}. Come back tomorrow to keep them blooming. 🌸</p>
+      <div class="big">${peek ? '🎯' : '🎉'}</div>
+      <h2>${peek ? 'Practice done!' : 'Garden watered!'}</h2>
+      <p>You ${peek ? 'practised' : 'reviewed'} <b>${session.total}</b> card${session.total===1?'':'s'}.${peek ? ' (Schedule unchanged.)' : ' Come back tomorrow to keep them blooming. 🌸'}</p>
       <div class="row" style="justify-content:center; margin-top:18px;">
         <button class="btn grape" id="finBack">${currentDeck ? '← '+back : '← '+back}</button>
       </div>
@@ -1273,10 +1354,11 @@ document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
 document.querySelectorAll('.modal-bg').forEach(m => m.onclick = e => { if (e.target === m) { m.classList.remove('open'); if (currentDeck) renderDeckHome(); } });
 
 //// ---------- nav ----------
-function goHome() { currentDeck = null; session = null; $('#undoBtn').classList.add('hidden'); $('#study').classList.remove('active'); renderHome(); }
+function goHome() { stopSpeech(); currentDeck = null; session = null; $('#undoBtn').classList.add('hidden'); $('#speakBtn').classList.add('hidden'); $('#study').classList.remove('active'); renderHome(); }
 $('#backBtn').onclick = goHome;
 $('#studyAllBtn').onclick = startStudyAll;
 $('#undoBtn').onclick = undoLast;
+$('#speakBtn').onclick = speakCurrent;
 
 //// ---------- stats ----------
 function computeStats() {
@@ -1503,13 +1585,43 @@ function renderSettings() {
   $('#optRetention').value = Math.round(state.settings.retention * 100);
   $('#retVal').textContent = Math.round(state.settings.retention * 100) + '%';
   $('#optLeech').value = state.settings.leech;
+  $('#optAutoSpeak').checked = state.settings.autoSpeak;
+  $('#speakField').style.display = ttsOn() ? '' : 'none';
 }
 $('#optLeech') && ($('#optLeech').onchange = e => {
   const n = parseInt(e.target.value, 10);
   state.settings.leech = Number.isFinite(n) && n >= 0 ? n : 8;
   e.target.value = state.settings.leech; save();
 });
+$('#optAutoSpeak').onchange = e => { state.settings.autoSpeak = e.target.checked; save(); };
 $('#settingsBtn').onclick = () => { renderSettings(); $('#settingsModal').classList.add('open'); };
+
+//// ---------- custom study + cheatsheet ----------
+function openCustomStudy() { $('#customModal').classList.add('open'); }
+$('#csAhead').onclick = () => {
+  const days = Math.max(1, Math.min(30, parseInt($('#csDays').value, 10) || 3));
+  const horizon = now() + days * DAY;
+  const units = deckUnits(currentDeck).filter(u => { const s = getSched(u.card, u.dir); return s.reps > 0 && s.due <= horizon; });
+  $('#customModal').classList.remove('open');
+  if (!units.length) { flash('Nothing due that soon 🌱'); return; }
+  startSession(units, currentDeck.opts.typed, false);   // study-ahead reschedules normally
+};
+$('#csCram').onclick = () => {
+  $('#customModal').classList.remove('open');
+  startSession(deckUnits(currentDeck), false, true);     // peek
+};
+$('#csLapsed').onclick = () => {
+  const units = deckUnits(currentDeck).filter(u => (u.card.lapses || 0) > 0 || (u.card.tags || []).includes('leech'));
+  // include suspended leeches too (deckUnits skips suspended), so rebuild from cards
+  const extra = currentDeck.cards.filter(c => c.suspended && ((c.lapses || 0) > 0 || (c.tags || []).includes('leech')))
+    .map(c => ({ card: c, dir: 'f', deck: currentDeck }));
+  const all = [...units, ...extra];
+  $('#customModal').classList.remove('open');
+  if (!all.length) { flash('No lapsed cards — nice! ✨'); return; }
+  startSession(all, false, true);                        // peek
+};
+function openCheatsheet() { $('#cheatModal').classList.add('open'); }
+$('#helpBtn').onclick = openCheatsheet;
 $('#schedSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   state.settings.scheduler = b.dataset.sched; save(); renderSettings();
 });
@@ -1604,6 +1716,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open'));
     return;
   }
+  if (e.key === '?' && !(e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName))) { e.preventDefault(); openCheatsheet(); return; }
   if (!session) return;
   // typing the answer: Enter checks, other keys go to the input (no shortcuts)
   if (e.target && e.target.id === 'typedInput') {
@@ -1611,6 +1724,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.key === 'u' || ((e.ctrlKey || e.metaKey) && e.key === 'z')) { e.preventDefault(); undoLast(); return; }
+  if (e.key === 's') { e.preventDefault(); speakCurrent(); return; }
   if (e.code === 'Space') { e.preventDefault(); if (!session.flipped) doFlip(); }
   if (session.flipped && ['1','2','3','4'].includes(e.key)) gradeCard(+e.key - 1);
 });

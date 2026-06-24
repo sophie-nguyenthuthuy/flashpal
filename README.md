@@ -27,6 +27,13 @@ dependencies, no server. Just open it and study.
 - **Suspend / resume** any card (⏸️/▶️) to take it out of rotation.
 - **Card info** — an ℹ️ popup per card: stability/difficulty/retrievability (or
   ease/reps under SM-2), lapses, next-due, and a sparkline of recent grades.
+- **Custom study** — extra practice that won't disturb your schedule: *study
+  ahead* (pull in cards due soon — these do reschedule), *cram all*, or
+  *practice lapsed & leeches* (the last two are peek-only).
+- **Text-to-speech** — speak the current side aloud (🔊 / press `S`), with an
+  optional auto-speak setting that reads the front on show and answer on flip.
+- **Keyboard shortcuts** — `Space` flip · `1-4` grade · `S` speak · `U` undo ·
+  `?` cheatsheet. Press `?` any time for the full list.
 - **Search everything** — fuzzy search front/back/`#tag` across all decks; click
   a result to jump straight into editing it.
 - **Undo** — take back the last review mid-session (`u` or ⌘/Ctrl-Z); it restores
