@@ -21,6 +21,14 @@ dependencies, no server. Just open it and study.
   it on the front, revealing it on the back. Multiple blanks per card supported.
 - **Anki `.apkg` import** — drop in a real Anki export and FlashPal reads the
   notes into a new deck (unzip + SQLite parsed in-browser; needs a connection).
+- **Search everything** — fuzzy search front/back/`#tag` across all decks; click
+  a result to jump straight into editing it.
+- **Undo** — take back the last review mid-session (`u` or ⌘/Ctrl-Z); it restores
+  the card's schedule, the queue, and your streak.
+- **Growth calendar** — a GitHub-style activity heatmap of the last 18 weeks in
+  the stats panel, so you can watch your streak bloom.
+- **Manage** — rename decks (add `::` to nest them), move a card to another deck,
+  filter a deck by tag.
 - **Typed-answer mode** — per deck, type the answer and FlashPal checks it
   (case-, accent- and punctuation-insensitive), then suggests a grade.
 - **Reverse cards** — per deck, add a back → front review for each basic card,

@@ -156,6 +156,14 @@
   .opt-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--grape); cursor: pointer; }
   .opt-check span b { display: block; font-size: .95rem; }
   .opt-check span small { color: #9a8bb0; font-weight: 600; }
+  .search-results { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .sresult { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: #f7f3ff; cursor: pointer; }
+  .sresult:hover { background: #efe6ff; }
+  body.dark .sresult { background: #1f1a38; } body.dark .sresult:hover { background: #322a52; }
+  .sresult .sr-deck { font-size: .72rem; font-weight: 800; color: var(--grape-d); }
+  .sresult .sr-front { font-weight: 700; }
+  .field select { width: 100%; border: 2px solid #ece3ff; border-radius: 14px; padding: 12px 14px; font-family: inherit; font-size: 1rem; background: #fbf9ff; color: var(--ink); }
+  body.dark .field select { background: #1f1a38; border-color: #3a3160; }
   .seg { display: flex; gap: 8px; }
   .seg button { flex: 1; border: 2px solid #ece3ff; background: #fbf9ff; color: var(--ink); border-radius: 14px; padding: 12px; font-family: inherit; font-weight: 800; cursor: pointer; transition: all .12s; }
   .seg button small { font-weight: 600; color: #9a8bb0; }
@@ -227,6 +235,17 @@
   .fbar .bar { width: 100%; background: linear-gradient(180deg, var(--pink), var(--grape)); border-radius: 8px 8px 4px 4px; min-height: 4px; transition: height .5s cubic-bezier(.5,1.6,.4,1); }
   .fbar .v { font-size: .72rem; font-weight: 800; color: #8a7aa6; }
   .fbar .d { font-size: .68rem; color: #b3a5c8; font-weight: 700; }
+  /* activity heatmap */
+  .heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+  .hcol { display: flex; flex-direction: column; gap: 3px; }
+  .hcell { width: 13px; height: 13px; border-radius: 4px; background: #ece4f7; flex: none; }
+  .hcell.empty { background: transparent; }
+  .hcell.t0 { background: #ece4f7; } .hcell.t1 { background: #cdeada; }
+  .hcell.t2 { background: #8fdcb4; } .hcell.t3 { background: #4cc78d; } .hcell.t4 { background: #2ba06a; }
+  body.dark .hcell.t0 { background: #2b2547; }
+  .heat-legend { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; color: #9a8bb0; font-size: .76rem; font-weight: 700; }
+  .heat-scale { display: inline-flex; align-items: center; gap: 3px; }
+  .heat-scale i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
   .modal p code { background: #efe6ff; padding: 1px 6px; border-radius: 6px; font-size: .82rem; }
   .crow .edit { background: none; border: none; cursor: pointer; opacity: .4; font-size: 1rem; }
   .crow .edit:hover { opacity: 1; }
@@ -274,6 +293,7 @@
   <header class="app">
     <div class="logo"><span class="mark pal" id="pal">🦊</span> FlashPal</div>
     <div class="toolbar">
+      <button class="icon-btn" id="searchBtn" title="Search cards">🔍</button>
       <button class="icon-btn" id="statsBtn" title="Stats">📊</button>
       <button class="icon-btn" id="settingsBtn" title="Settings">🧠</button>
       <button class="icon-btn" id="exportBtn" title="Export backup">⬇️</button>
@@ -299,6 +319,7 @@
       <button class="btn ghost sm" id="backBtn">← back</button>
       <div class="progress"><div id="progBar"></div></div>
       <span class="counts" id="counts"></span>
+      <button class="btn ghost sm hidden" id="undoBtn">↩ undo</button>
     </div>
     <div id="studyBody"></div>
   </section>
@@ -348,6 +369,10 @@
       <label>Tags <small style="color:#b3a5c8;font-weight:600">— space or comma separated</small></label>
       <input id="cardTags" placeholder="e.g. biology cells exam2" />
     </div>
+    <div class="field hidden" id="moveField">
+      <label>Deck</label>
+      <select id="cardDeck"></select>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Done</button>
       <button class="btn mint" id="addCard">Add & keep going ↵</button>
@@ -381,6 +406,16 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
   </div>
 </div>
 
+<!-- SEARCH MODAL -->
+<div class="modal-bg" id="searchModal">
+  <div class="modal" style="max-width:560px">
+    <h2>🔍 Search cards</h2>
+    <div class="field"><input id="searchInput" placeholder="Search front, back, or #tag…" autocomplete="off" /></div>
+    <div id="searchResults" class="search-results"></div>
+    <div class="modal-actions"><button class="btn grape" data-close>Close</button></div>
+  </div>
+</div>
+
 <!-- GLOBAL SETTINGS MODAL -->
 <div class="modal-bg" id="settingsModal">
   <div class="modal">
@@ -404,6 +439,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
 <div class="modal-bg" id="deckOptsModal">
   <div class="modal">
     <h2 id="deckOptsTitle">⚙️ Deck options</h2>
+    <div class="field">
+      <label>Deck name <small style="color:#b3a5c8;font-weight:600">— use <code>Parent::Child</code> to nest</small></label>
+      <input id="optDeckName" maxlength="60" />
+    </div>
     <div class="field">
       <label>New cards per day</label>
       <input id="optNewPerDay" type="number" min="0" max="999" />
@@ -440,6 +479,8 @@ function normalize(s) {
   if (!s || !Array.isArray(s.decks)) return null;
   if (!s.streak || typeof s.streak.count !== 'number' || typeof s.streak.date !== 'string')
     s.streak = { date: todayStr(), count: 0 };
+  // review history: { 'YYYY-MM-DD': count }
+  if (!s.history || typeof s.history !== 'object' || Array.isArray(s.history)) s.history = {};
   // global settings
   if (!s.settings || typeof s.settings !== 'object') s.settings = {};
   if (s.settings.scheduler !== 'sm2') s.settings.scheduler = 'fsrs';
@@ -644,6 +685,14 @@ const dueCards = (deck) => dueUnits(deck);        // count helper (length used f
 function bumpStreak() {
   if (!state.streak || state.streak.date !== todayStr()) state.streak = { date: todayStr(), count: 0 };
   state.streak.count++;
+  if (!state.history) state.history = {};
+  state.history[todayStr()] = (state.history[todayStr()] || 0) + 1;
+  save(); renderStreak();
+}
+function unbumpStreak() {   // for undo
+  const t = todayStr();
+  if (state.streak && state.streak.date === t) state.streak.count = Math.max(0, state.streak.count - 1);
+  if (state.history && state.history[t]) { state.history[t]--; if (state.history[t] <= 0) delete state.history[t]; }
   save(); renderStreak();
 }
 function renderStreak() {
@@ -843,6 +892,7 @@ function renderCard() {
   const pct = Math.round((s.done / s.total) * 100);
   $('#progBar').style.width = pct + '%';
   $('#counts').textContent = `${s.done}/${s.total}`;
+  $('#undoBtn').classList.toggle('hidden', !(s.undoStack && s.undoStack.length));
   if (!s.queue.length) return finishSession();
   const u = s.queue[0];
   s.flipped = false; s.checked = false;
@@ -915,8 +965,16 @@ function doFlip() {
 
 function gradeCard(grade) {
   const s = session;
-  const u = s.queue.shift();
-  const wasNew = getSched(u.card, u.dir).reps === 0;
+  const u = s.queue[0];
+  const prevSched = getSched(u.card, u.dir);
+  const wasNew = prevSched.reps === 0;
+  // snapshot for undo (queue + counters + this card's schedule + deck intro)
+  (s.undoStack = s.undoStack || []).push({
+    unit: u, dir: u.dir, deck: u.deck, prevSched,
+    queueBefore: s.queue.slice(), doneBefore: s.done,
+    introBefore: u.deck && u.deck.intro ? { ...u.deck.intro } : null,
+  });
+  s.queue.shift();
   const sc = getSched(u.card, u.dir);
   scheduleObj(sc, grade);
   setSched(u.card, u.dir, sc);
@@ -934,9 +992,24 @@ function gradeCard(grade) {
   renderCard();
 }
 
+function undoLast() {
+  const s = session;
+  if (!s || !s.undoStack || !s.undoStack.length) return;
+  const e = s.undoStack.pop();
+  setSched(e.unit.card, e.dir, e.prevSched);
+  if (e.deck && e.introBefore) e.deck.intro = e.introBefore;
+  s.queue = e.queueBefore;
+  s.done = e.doneBefore;
+  unbumpStreak();
+  save();
+  flash('Undid last review ↩');
+  renderCard();
+}
+
 function finishSession() {
   burst(40);
   palCheer();
+  $('#undoBtn').classList.add('hidden');
   const back = currentDeck ? `back to ${escapeHtml(currentDeck.name)}` : 'back to decks';
   $('#progBar').style.width = '100%';
   $('#studyBody').innerHTML = `
@@ -1019,6 +1092,13 @@ function openCardModal(card) {
   $('#cardTags').value = card && card.tags ? card.tags.join(' ') : '';
   $('#cardModalTitle').textContent = card ? '✏️ Edit card' : '🃏 New card';
   $('#addCard').textContent = card ? 'Save changes' : 'Add & keep going ↵';
+  // move-card dropdown only makes sense when editing an existing card
+  const mf = $('#moveField');
+  if (card) {
+    mf.classList.remove('hidden');
+    $('#cardDeck').innerHTML = state.decks.map(d =>
+      `<option value="${d.id}" ${d === currentDeck ? 'selected' : ''}>${escapeHtml(d.emoji + ' ' + d.name)}</option>`).join('');
+  } else mf.classList.add('hidden');
   $('#cardModal').classList.add('open');
   setTimeout(() => $('#cardFront').focus(), 50);
 }
@@ -1031,8 +1111,16 @@ function addCardFn() {
   if (!front || (!back && !CLOZE_RE.test(front))) { flash('Add a front + back (or a {{cloze}} blank) 🃏'); return; }
   if (editingCard) {
     editingCard.front = front; editingCard.back = back; editingCard.tags = tags;
+    // move to another deck if changed
+    const targetId = $('#cardDeck').value;
+    const target = state.decks.find(d => d.id === targetId);
+    if (target && target !== currentDeck) {
+      currentDeck.cards = currentDeck.cards.filter(c => c !== editingCard);
+      target.cards.push(editingCard);
+    }
     save(); $('#cardModal').classList.remove('open');
-    editingCard = null; renderDeckHome(); flash('Card updated ✨'); return;
+    const moved = target && target !== currentDeck;
+    editingCard = null; renderDeckHome(); flash(moved ? `Moved to ${target.emoji} ${target.name} 🚚` : 'Card updated ✨'); return;
   }
   currentDeck.cards.push({ id: rid(), front, back, tags, ease: 2.5, interval: 0, reps: 0, due: now() });
   save();
@@ -1096,6 +1184,7 @@ $('#doImportCards').onclick = () => {
 function openDeckOpts() {
   const o = currentDeck.opts;
   $('#deckOptsTitle').textContent = `⚙️ ${currentDeck.emoji} ${currentDeck.name}`;
+  $('#optDeckName').value = currentDeck.name;
   $('#optNewPerDay').value = o.newPerDay;
   $('#optTyped').checked = o.typed;
   $('#optReverse').checked = o.reverse === 'both';
@@ -1103,6 +1192,8 @@ function openDeckOpts() {
 }
 $('#saveDeckOpts').onclick = () => {
   const o = currentDeck.opts;
+  const newName = $('#optDeckName').value.trim();
+  if (newName) currentDeck.name = newName;
   const n = parseInt($('#optNewPerDay').value, 10);
   o.newPerDay = Number.isFinite(n) && n >= 0 ? n : 20;
   o.typed = $('#optTyped').checked;
@@ -1118,9 +1209,10 @@ document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
 document.querySelectorAll('.modal-bg').forEach(m => m.onclick = e => { if (e.target === m) { m.classList.remove('open'); if (currentDeck) renderDeckHome(); } });
 
 //// ---------- nav ----------
-function goHome() { currentDeck = null; session = null; $('#study').classList.remove('active'); renderHome(); }
+function goHome() { currentDeck = null; session = null; $('#undoBtn').classList.add('hidden'); $('#study').classList.remove('active'); renderHome(); }
 $('#backBtn').onclick = goHome;
 $('#studyAllBtn').onclick = startStudyAll;
+$('#undoBtn').onclick = undoLast;
 
 //// ---------- stats ----------
 function computeStats() {
@@ -1158,11 +1250,45 @@ function openStats() {
       <div class="stat"><div class="n">${s.reviews}</div><div class="l">today's reviews</div></div>
     </div>
     <div class="fc-title">🌤️ Reviews due — next 7 days</div>
-    <div class="forecast">${bars}</div>`;
+    <div class="forecast">${bars}</div>
+    <div class="fc-title">🌱 Growth calendar — last 18 weeks</div>
+    ${heatmapHtml()}`;
   $('#statsModal').classList.add('open');
   requestAnimationFrame(() => $('#statsBody').querySelectorAll('.bar').forEach((b,i) => b.style.height = Math.round((s.forecast[i]/max)*100) + '%'));
 }
 $('#statsBtn').onclick = openStats;
+
+// GitHub-style activity heatmap from state.history
+function heatmapTier(n) { return n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 10 ? 3 : 4; }
+function heatmapHtml() {
+  const hist = state.history || {};
+  const WEEKS = 18;
+  // walk dates in UTC so keys match todayStr() (also UTC-based)
+  const today = new Date(todayStr() + 'T00:00:00Z');
+  const start = new Date(today); start.setUTCDate(start.getUTCDate() - (WEEKS * 7 - 1));
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay()); // back to Sunday
+  let total = 0, active = 0, best = 0;
+  let cols = '';
+  for (let w = 0; w < WEEKS + 1; w++) {
+    let cells = '';
+    for (let dow = 0; dow < 7; dow++) {
+      const d = new Date(start); d.setUTCDate(start.getUTCDate() + w * 7 + dow);
+      if (d > today) { cells += `<div class="hcell empty"></div>`; continue; }
+      const key = d.toISOString().slice(0, 10);
+      const n = hist[key] || 0;
+      total += n; if (n > 0) active++; best = Math.max(best, n);
+      cells += `<div class="hcell t${heatmapTier(n)}" title="${key}: ${n} review${n === 1 ? '' : 's'}"></div>`;
+    }
+    cols += `<div class="hcol">${cells}</div>`;
+  }
+  return `<div class="heatmap">${cols}</div>
+    <div class="heat-legend">
+      <span>${total} reviews · ${active} active days · best ${best}/day</span>
+      <span class="heat-scale">less
+        <i class="hcell t0"></i><i class="hcell t1"></i><i class="hcell t2"></i><i class="hcell t3"></i><i class="hcell t4"></i>
+        more</span>
+    </div>`;
+}
 
 //// ---------- export / import backup ----------
 function exportBackup() {
@@ -1289,6 +1415,38 @@ $('#optRetention').oninput = (e) => {
   $('#retVal').textContent = e.target.value + '%'; save();
 };
 
+//// ---------- global search ----------
+$('#searchBtn').onclick = () => {
+  $('#searchInput').value = ''; $('#searchResults').innerHTML = '';
+  $('#searchModal').classList.add('open');
+  setTimeout(() => $('#searchInput').focus(), 50);
+};
+$('#searchInput').oninput = e => renderSearch(e.target.value);
+function renderSearch(q) {
+  q = q.trim().toLowerCase();
+  const box = $('#searchResults');
+  if (!q) { box.innerHTML = ''; return; }
+  const tagQ = q.startsWith('#') ? q.slice(1) : null;
+  const results = [];
+  for (const d of state.decks) for (const c of d.cards) {
+    const match = tagQ
+      ? (c.tags || []).some(t => t.toLowerCase().includes(tagQ))
+      : (c.front + ' ' + c.back + ' ' + (c.tags || []).join(' ')).toLowerCase().includes(q);
+    if (match) results.push({ d, c });
+    if (results.length >= 60) break;
+  }
+  if (!results.length) { box.innerHTML = `<div class="empty">No matches 🔍</div>`; return; }
+  box.innerHTML = '';
+  results.forEach(({ d, c }) => {
+    const row = document.createElement('div');
+    row.className = 'sresult';
+    row.innerHTML = `<span class="sr-deck">${d.emoji} ${escapeHtml(d.name)}</span>
+      <span class="sr-front">${escapeHtml(plainText(c.front))}</span>`;
+    row.onclick = () => { $('#searchModal').classList.remove('open'); openDeck(d.id); openCardModal(c); };
+    box.appendChild(row);
+  });
+}
+
 //// ---------- keyboard ----------
 document.addEventListener('keydown', e => {
   if (document.querySelector('.modal-bg.open')) {
@@ -1303,6 +1461,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); if (!session.checked) checkTyped(); }
     return;
   }
+  if (e.key === 'u' || ((e.ctrlKey || e.metaKey) && e.key === 'z')) { e.preventDefault(); undoLast(); return; }
   if (e.code === 'Space') { e.preventDefault(); if (!session.flipped) doFlip(); }
   if (session.flipped && ['1','2','3','4'].includes(e.key)) gradeCard(+e.key - 1);
 });
