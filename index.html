@@ -71,7 +71,17 @@
   .btn.sm { padding: 8px 14px; font-size: .85rem; border-radius: 12px; }
 
   /* deck grid */
-  .decks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; margin-top: 18px; }
+  .decks { margin-top: 18px; display: flex; flex-direction: column; gap: 22px; }
+  .deckgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+  .group-sec { background: rgba(255,255,255,.45); border: 2px dashed #e6dcff; border-radius: 24px; padding: 14px 16px 18px; }
+  body.dark .group-sec { background: rgba(40,33,66,.4); border-color: #3a3160; }
+  .group-head { display: flex; align-items: center; gap: 10px; margin: 2px 4px 14px; flex-wrap: wrap; }
+  .group-head .gh-emoji { font-size: 1.5rem; }
+  .group-head h2 { margin: 0; font-size: 1.25rem; }
+  .group-head .gh-meta { color: #a596bd; font-size: .85rem; font-weight: 700; }
+  .group-head .gh-study { margin-left: auto; }
+  .deck.sub h3 { font-size: 1.05rem; }
+  .deck.sub .crumb { color: #c3b3e0; }
   .deck {
     background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow);
     cursor: pointer; position: relative; overflow: hidden; transition: transform .15s ease;
@@ -146,6 +156,13 @@
   .opt-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--grape); cursor: pointer; }
   .opt-check span b { display: block; font-size: .95rem; }
   .opt-check span small { color: #9a8bb0; font-weight: 600; }
+  .seg { display: flex; gap: 8px; }
+  .seg button { flex: 1; border: 2px solid #ece3ff; background: #fbf9ff; color: var(--ink); border-radius: 14px; padding: 12px; font-family: inherit; font-weight: 800; cursor: pointer; transition: all .12s; }
+  .seg button small { font-weight: 600; color: #9a8bb0; }
+  .seg button.sel { border-color: var(--grape); background: #f3eeff; }
+  body.dark .seg button { background: #1f1a38; border-color: #3a3160; }
+  body.dark .seg button.sel { background: #322a52; }
+  input[type=range] { width: 100%; accent-color: var(--grape); }
 
   .done-card { text-align: center; background: var(--card); border-radius: 26px; padding: 44px; box-shadow: var(--shadow); }
   .done-card .big { font-size: 3.4rem; }
@@ -215,6 +232,23 @@
   .crow .edit:hover { opacity: 1; }
   .crow.cloze-row .q { color: var(--grape-d); }
 
+  /* media on cards */
+  .cardimg { max-width: 100%; max-height: 230px; border-radius: 14px; margin: 8px 0; }
+  .cardaud { width: 100%; margin: 8px 0; }
+  .media-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; }
+  .media-hint { color: #b3a5c8; font-size: .78rem; }
+  .media-hint code { background: #efe6ff; padding: 1px 5px; border-radius: 5px; }
+  body.dark .media-hint code { background: #3a2f63; }
+
+  /* tags */
+  .tagchip { display: inline-block; background: #eef6ff; color: #5a86c9; font-size: .68rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; margin-left: 4px; }
+  body.dark .tagchip { background: #243a52; color: #9ec3ff; }
+  .tagfilter { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
+  .tagfilter button { border: 2px solid #ece3ff; background: #fbf9ff; color: var(--ink); border-radius: 999px; padding: 4px 12px; font-family: inherit; font-weight: 700; font-size: .8rem; cursor: pointer; }
+  .tagfilter button.sel { border-color: var(--grape); background: #f3eeff; color: var(--grape-d); }
+  .tagfilter button.study-tag { border-color: transparent; background: linear-gradient(135deg, var(--pink), var(--pink-d)); color: #fff; }
+  body.dark .tagfilter button { background: #1f1a38; border-color: #3a3160; }
+
   /* dark mode — night garden */
   body.dark {
     --bg: #1d1833; --bg2: #15112a; --ink: #ece7f7; --card: #272142;
@@ -241,12 +275,13 @@
     <div class="logo"><span class="mark pal" id="pal">🦊</span> FlashPal</div>
     <div class="toolbar">
       <button class="icon-btn" id="statsBtn" title="Stats">📊</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">🧠</button>
       <button class="icon-btn" id="exportBtn" title="Export backup">⬇️</button>
-      <button class="icon-btn" id="importBtn" title="Import backup">⬆️</button>
+      <button class="icon-btn" id="importBtn" title="Import backup or Anki .apkg">⬆️</button>
       <button class="icon-btn" id="themeBtn" title="Toggle dark mode">🌙</button>
       <div class="streak" id="streak" title="cards reviewed today">⚡ <span id="streakN">0</span></div>
     </div>
-    <input type="file" id="importFile" accept="application/json,.json" class="hidden" />
+    <input type="file" id="importFile" accept="application/json,.json,.apkg,.colpkg" class="hidden" />
   </header>
   <p class="tag">A whimsical little memory garden — plant a card, water it daily, watch it bloom. 🌱</p>
 
@@ -281,7 +316,7 @@
     </div>
     <div class="field">
       <label>Deck name</label>
-      <input id="deckName" placeholder="e.g. Spanish verbs, Capitals, Guitar chords" maxlength="40" />
+      <input id="deckName" placeholder="e.g. Spanish, or Spanish::Verbs for a sub-deck" maxlength="60" />
     </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Cancel</button>
@@ -301,6 +336,17 @@
     <div class="field">
       <label id="cardBackLabel">Back (answer)</label>
       <textarea id="cardBack" rows="2" placeholder="...and the answer?"></textarea>
+    </div>
+    <div class="media-bar">
+      <button type="button" class="btn ghost sm" id="addImgBtn">🖼 Image</button>
+      <button type="button" class="btn ghost sm" id="addAudBtn">🔊 Audio</button>
+      <span class="media-hint">or type <code>![](url)</code> / <code>@[audio](url)</code></span>
+    </div>
+    <input type="file" id="imgFile" accept="image/*" class="hidden" />
+    <input type="file" id="audFile" accept="audio/*" class="hidden" />
+    <div class="field">
+      <label>Tags <small style="color:#b3a5c8;font-weight:600">— space or comma separated</small></label>
+      <input id="cardTags" placeholder="e.g. biology cells exam2" />
     </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Done</button>
@@ -332,6 +378,25 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
     <h2>📊 Your garden stats</h2>
     <div id="statsBody"></div>
     <div class="modal-actions"><button class="btn grape" data-close>Lovely ✦</button></div>
+  </div>
+</div>
+
+<!-- GLOBAL SETTINGS MODAL -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <h2>🧠 Settings</h2>
+    <div class="field">
+      <label>Scheduler</label>
+      <div class="seg" id="schedSeg">
+        <button data-sched="fsrs">FSRS&nbsp;<small>(modern)</small></button>
+        <button data-sched="sm2">SM-2&nbsp;<small>(classic)</small></button>
+      </div>
+    </div>
+    <div class="field" id="retField">
+      <label>Target retention — <b id="retVal">90%</b> <small>(higher = more reviews)</small></label>
+      <input id="optRetention" type="range" min="70" max="97" step="1" />
+    </div>
+    <div class="modal-actions"><button class="btn grape" data-close>Done</button></div>
   </div>
 </div>
 
@@ -375,6 +440,11 @@ function normalize(s) {
   if (!s || !Array.isArray(s.decks)) return null;
   if (!s.streak || typeof s.streak.count !== 'number' || typeof s.streak.date !== 'string')
     s.streak = { date: todayStr(), count: 0 };
+  // global settings
+  if (!s.settings || typeof s.settings !== 'object') s.settings = {};
+  if (s.settings.scheduler !== 'sm2') s.settings.scheduler = 'fsrs';
+  if (typeof s.settings.retention !== 'number' || s.settings.retention < 0.7 || s.settings.retention > 0.99)
+    s.settings.retention = 0.9;
   for (const d of s.decks) {
     if (!Array.isArray(d.cards)) d.cards = [];
     if (!d.id) d.id = rid();
@@ -395,6 +465,7 @@ function normalize(s) {
       if (typeof c.interval !== 'number') c.interval = 0;
       if (typeof c.reps !== 'number') c.reps = 0;
       if (typeof c.due !== 'number') c.due = now();
+      if (!Array.isArray(c.tags)) c.tags = [];
     }
   }
   return s;
@@ -420,21 +491,52 @@ function seed() {
 function rid() { return Math.random().toString(36).slice(2, 10); }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-//// ---------- cloze ({{answer}} blanks) ----------
+//// ---------- rich content: cloze blanks + image/audio media ----------
+// markup:  {{answer}}  ·  ![alt](url)  image  ·  @[audio](url)  audio
 const CLOZE_RE = /\{\{(.+?)\}\}/;
+const TOKEN_RE = /(\{\{.+?\}\})|(!\[[^\]]*\]\([^)]+\))|(@\[audio\]\([^)]+\))/g;
 function isCloze(card) { return CLOZE_RE.test(card.front); }
-// front side: blank out the answers
-function clozeFront(text) { return escapeHtml(text).replace(/\{\{(.+?)\}\}/g, '<span class="cloze">[ … ]</span>'); }
-// back side: reveal them
-function clozeBack(text) { return escapeHtml(text).replace(/\{\{(.+?)\}\}/g, (m, p1) => '<span class="cloze-rev">' + p1 + '</span>'); }
-// plain text for list rows (answers shown bracketed)
-function clozePlain(text) { return text.replace(/\{\{(.+?)\}\}/g, '[$1]'); }
+function safeUrl(u) { return /^(https?:\/\/|data:image\/|data:audio\/)/i.test(u.trim()); }
+function attrUrl(u) { return u.trim().replace(/["'<>\s]/g, ''); }
+// reveal=true shows cloze answers; false blanks them
+function renderRich(text, reveal) {
+  let out = '', last = 0, m; TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(text))) {
+    out += escapeHtml(text.slice(last, m.index));
+    if (m[1]) {
+      const ans = m[1].slice(2, -2);
+      out += reveal ? `<span class="cloze-rev">${escapeHtml(ans)}</span>` : '<span class="cloze">[ … ]</span>';
+    } else if (m[2]) {
+      const url = m[2].replace(/^!\[[^\]]*\]\(/, '').replace(/\)$/, '');
+      out += safeUrl(url) ? `<img class="cardimg" src="${attrUrl(url)}" alt="" />` : escapeHtml(m[2]);
+    } else {
+      const url = m[3].replace(/^@\[audio\]\(/, '').replace(/\)$/, '');
+      out += safeUrl(url) ? `<audio class="cardaud" controls src="${attrUrl(url)}"></audio>` : escapeHtml(m[3]);
+    }
+    last = TOKEN_RE.lastIndex;
+  }
+  return out + escapeHtml(text.slice(last));
+}
+const clozeFront = text => renderRich(text, false);
+const clozeBack = text => renderRich(text, true);
+// compact text for list rows: cloze bracketed, media as icons
+function plainText(text) {
+  return text.replace(/\{\{(.+?)\}\}/g, '[$1]')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '🖼')
+    .replace(/@\[audio\]\([^)]+\)/g, '🔊');
+}
 
-//// ---------- SM-2-ish scheduler ----------
-// grade: 0=again 1=hard 2=good 3=easy
-// A "sched" is {ease, interval, reps, due}. scheduleObj mutates it in place.
+//// ---------- scheduler ----------
+// grade: 0=again 1=hard 2=good 3=easy.  A "sched" is {ease, interval, reps, due, s, d, last}.
+// scheduleObj mutates it in place, branching on the chosen algorithm.
 function scheduleObj(s, grade) {
+  return (state.settings && state.settings.scheduler === 'sm2') ? sm2Schedule(s, grade) : fsrsSchedule(s, grade);
+}
+
+// --- SM-2 ---
+function sm2Schedule(s, grade) {
   let { ease, interval, reps } = s;
+  if (ease == null) ease = 2.5;
   if (grade === 0) { reps = 0; interval = 0; ease = Math.max(1.3, ease - 0.2); }
   else {
     ease = Math.max(1.3, ease + (grade === 1 ? -0.15 : grade === 3 ? 0.15 : 0));
@@ -445,22 +547,54 @@ function scheduleObj(s, grade) {
     interval = Math.max(grade === 0 ? 0 : 1, interval);
   }
   s.ease = ease; s.interval = interval; s.reps = reps;
-  // "again" / interval 0 => come back in ~10 min; otherwise interval days out
   s.due = now() + (interval === 0 ? 10 * 60 * 1000 : interval * DAY);
   return s;
 }
+
+// --- FSRS-4.5 (free spaced repetition scheduler) ---
+const FSRS_W = [0.4197,1.1869,3.0412,15.2441,7.1434,0.6477,1.0007,0.0674,1.6597,0.1712,1.1178,2.0225,0.0904,0.3025,2.1214,0.2498,2.9466];
+const FSRS_DECAY = -0.5;
+const FSRS_FACTOR = Math.pow(0.9, 1 / FSRS_DECAY) - 1;   // ≈ 19/81
+const clampD = d => Math.min(10, Math.max(1, d));
+const fsrsR = (t, S) => Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);                 // retrievability after t days
+const fsrsInterval = (S, ret) => (S / FSRS_FACTOR) * (Math.pow(ret, 1 / FSRS_DECAY) - 1);
+const fsrsS0 = G => Math.max(0.1, FSRS_W[G - 1]);
+const fsrsD0 = G => clampD(FSRS_W[4] - Math.exp(FSRS_W[5] * (G - 1)) + 1);
+const fsrsNextD = (D, G) => clampD(FSRS_W[7] * fsrsD0(4) + (1 - FSRS_W[7]) * (D - FSRS_W[6] * (G - 3)));
+function fsrsNextS(D, S, R, G) {
+  if (G === 1) return FSRS_W[11] * Math.pow(D, -FSRS_W[12]) * (Math.pow(S + 1, FSRS_W[13]) - 1) * Math.exp(FSRS_W[14] * (1 - R));
+  const hard = G === 2 ? FSRS_W[15] : 1, easy = G === 4 ? FSRS_W[16] : 1;
+  return S * (1 + Math.exp(FSRS_W[8]) * (11 - D) * Math.pow(S, -FSRS_W[9]) * (Math.exp(FSRS_W[10] * (1 - R)) - 1) * hard * easy);
+}
+function fsrsSchedule(s, grade) {
+  const G = grade + 1;
+  const ret = (state.settings && state.settings.retention) || 0.9;
+  if (s.reps === 0 || s.s == null) {                      // first exposure
+    s.d = fsrsD0(G); s.s = fsrsS0(G);
+  } else {
+    const t = s.last ? Math.max(0, (now() - s.last) / DAY) : (s.interval || 0);
+    const R = fsrsR(t, s.s);
+    s.d = fsrsNextD(s.d, G);
+    s.s = Math.max(0.1, fsrsNextS(s.d, s.s, R, G));
+  }
+  s.reps += 1; s.last = now();
+  let iv = grade === 0 ? 0 : Math.max(1, Math.round(fsrsInterval(s.s, ret)));
+  s.interval = iv;
+  s.due = now() + (iv === 0 ? 10 * 60 * 1000 : iv * DAY);
+  return s;
+}
+
 // forward-direction scheduler kept for compatibility
 function schedule(card, grade) { scheduleObj(card, grade); return card; }
 
 // reverse cards: each direction has its own schedule. 'f' = front→back, 'r' = back→front.
-const RKEYS = { ease: 'rEase', interval: 'rInterval', reps: 'rReps', due: 'rDue' };
 function getSched(card, dir) {
-  if (dir === 'r') return { ease: card.rEase ?? 2.5, interval: card.rInterval ?? 0, reps: card.rReps ?? 0, due: card.rDue ?? now() };
-  return { ease: card.ease, interval: card.interval, reps: card.reps, due: card.due };
+  if (dir === 'r') return { ease: card.rEase ?? 2.5, interval: card.rInterval ?? 0, reps: card.rReps ?? 0, due: card.rDue ?? now(), s: card.rS, d: card.rD, last: card.rLast };
+  return { ease: card.ease, interval: card.interval, reps: card.reps, due: card.due, s: card.s, d: card.d, last: card.last };
 }
-function setSched(card, dir, s) {
-  if (dir === 'r') { card.rEase = s.ease; card.rInterval = s.interval; card.rReps = s.reps; card.rDue = s.due; }
-  else { card.ease = s.ease; card.interval = s.interval; card.reps = s.reps; card.due = s.due; }
+function setSched(card, dir, x) {
+  if (dir === 'r') { card.rEase = x.ease; card.rInterval = x.interval; card.rReps = x.reps; card.rDue = x.due; card.rS = x.s; card.rD = x.d; card.rLast = x.last; }
+  else { card.ease = x.ease; card.interval = x.interval; card.reps = x.reps; card.due = x.due; card.s = x.s; card.d = x.d; card.last = x.last; }
 }
 
 function fmtInterval(iv) {
@@ -521,29 +655,64 @@ function renderStreak() {
 const $ = s => document.querySelector(s);
 const decksEl = $('#decks');
 
+// one deck card element; sub=true shows only the sub-path under a group
+function deckCard(deck, sub) {
+  const due = dueUnits(deck).length;
+  const title = sub ? deck.name.split('::').slice(1).join('::') : deck.name;
+  const el = document.createElement('div');
+  el.className = 'deck' + (sub ? ' sub' : '');
+  el.innerHTML = `
+    <span class="due-pill ${due ? '' : 'zero'}">${due ? due + ' due' : 'all done ✓'}</span>
+    <span class="emoji">${deck.emoji}</span>
+    <h3>${escapeHtml(title)}</h3>
+    <div class="meta">${deck.cards.length} card${deck.cards.length === 1 ? '' : 's'}</div>
+    <button class="del" title="delete deck">🗑️</button>`;
+  el.onclick = (e) => { if (e.target.classList.contains('del')) return; openDeck(deck.id); };
+  el.querySelector('.del').onclick = (e) => { e.stopPropagation(); delDeck(deck.id); };
+  return el;
+}
+
 function renderHome() {
   $('#home').classList.remove('hidden');
   $('#study').classList.remove('active');
   decksEl.innerHTML = '';
-  state.decks.forEach(deck => {
-    const due = dueCards(deck).length;
-    const el = document.createElement('div');
-    el.className = 'deck';
-    el.innerHTML = `
-      <span class="due-pill ${due ? '' : 'zero'}">${due ? due + ' due' : 'all done ✓'}</span>
-      <span class="emoji">${deck.emoji}</span>
-      <h3>${escapeHtml(deck.name)}</h3>
-      <div class="meta">${deck.cards.length} card${deck.cards.length===1?'':'s'}</div>
-      <button class="del" title="delete deck">🗑️</button>`;
-    el.onclick = (e) => { if (e.target.classList.contains('del')) return; openDeck(deck.id); };
-    el.querySelector('.del').onclick = (e) => { e.stopPropagation(); delDeck(deck.id); };
-    decksEl.appendChild(el);
-  });
+  // group by top-level segment (decks named "A::B" are sub-decks of "A")
+  const groups = new Map();
+  for (const d of state.decks) {
+    const top = d.name.split('::')[0].trim();
+    if (!groups.has(top)) groups.set(top, []);
+    groups.get(top).push(d);
+  }
+  // singletons (a lone deck with no "::") share one grid; the rest become group sections
+  const singleGrid = document.createElement('div');
+  singleGrid.className = 'deckgrid';
+  for (const [top, decks] of groups) {
+    const isGroup = decks.length > 1 || decks[0].name.includes('::');
+    if (!isGroup) { singleGrid.appendChild(deckCard(decks[0], false)); continue; }
+    const sec = document.createElement('div');
+    sec.className = 'group-sec';
+    const totalCards = decks.reduce((a, d) => a + d.cards.length, 0);
+    const due = decks.reduce((a, d) => a + dueUnits(d).length, 0);
+    sec.innerHTML = `
+      <div class="group-head">
+        <span class="gh-emoji">📂</span>
+        <h2>${escapeHtml(top)}</h2>
+        <span class="gh-meta">${decks.length} decks · ${totalCards} cards · ${due} due</span>
+        ${due ? `<button class="btn pink sm gh-study">Study ${due} ✦</button>` : ''}
+      </div>
+      <div class="deckgrid groupgrid"></div>`;
+    const grid = sec.querySelector('.groupgrid');
+    decks.forEach(d => grid.appendChild(deckCard(d, true)));
+    const studyBtn = sec.querySelector('.gh-study');
+    if (studyBtn) studyBtn.onclick = () => { currentDeck = null; startSession(decks.flatMap(d => dueUnits(d)), false); };
+    decksEl.appendChild(sec);
+  }
   const add = document.createElement('div');
   add.className = 'new-deck';
   add.innerHTML = `<span class="plus">＋</span> New deck`;
   add.onclick = openDeckModal;
-  decksEl.appendChild(add);
+  singleGrid.appendChild(add);
+  decksEl.appendChild(singleGrid);
   renderStreak();
 }
 
@@ -556,8 +725,10 @@ function delDeck(id) {
 
 //// ---------- DECK view (manage + study button) ----------
 let currentDeck = null; // null = study all
+let cardFilter = null;  // active tag filter in the deck view
 function openDeck(id) {
   currentDeck = state.decks.find(d => d.id === id);
+  cardFilter = null;
   $('#home').classList.add('hidden');
   const study = $('#study'); study.classList.add('active');
   renderDeckHome();
@@ -584,21 +755,44 @@ function renderDeckHome() {
     </div>
     <div class="manage">
       <h3>📚 Cards</h3>
+      <div class="tagfilter" id="tagFilter"></div>
       <div class="card-list" id="cardList"></div>
     </div>`;
   $('#goStudy').onclick = () => startSession(due ? dueUnits(d) : deckUnits(d), d.opts.typed);
   $('#goAdd').onclick = () => openCardModal();
   $('#goImport').onclick = () => openImportCards();
   $('#goOpts').onclick = () => openDeckOpts();
+
+  // tag filter bar
+  const allTags = [...new Set(d.cards.flatMap(c => c.tags || []))].sort();
+  const tf = $('#tagFilter');
+  if (allTags.length) {
+    if (cardFilter && !allTags.includes(cardFilter)) cardFilter = null;
+    const mk = (label, val) => `<button class="${cardFilter === val ? 'sel' : ''}" data-tag="${val === null ? '' : escapeHtml(val)}">${label}</button>`;
+    tf.innerHTML = mk('All', null) + allTags.map(t => mk('#' + escapeHtml(t), t)).join('') +
+      (cardFilter ? `<button class="study-tag" data-tag="${escapeHtml(cardFilter)}">▶ Study #${escapeHtml(cardFilter)}</button>` : '');
+    tf.querySelectorAll('button[data-tag]').forEach(b => b.onclick = () => {
+      if (b.classList.contains('study-tag')) {
+        const us = dueUnits(d).filter(u => (u.card.tags || []).includes(cardFilter));
+        if (us.length) startSession(us, d.opts.typed); else flash('Nothing due with that tag 🌱');
+        return;
+      }
+      cardFilter = b.dataset.tag || null; renderDeckHome();
+    });
+  } else tf.style.display = 'none';
+
   const list = $('#cardList');
+  const shown = cardFilter ? d.cards.filter(c => (c.tags || []).includes(cardFilter)) : d.cards;
   if (!d.cards.length) list.innerHTML = `<div class="empty">No cards yet — add your first one! 🃏</div>`;
-  d.cards.forEach(c => {
+  else if (!shown.length) list.innerHTML = `<div class="empty">No cards with #${escapeHtml(cardFilter)} 🏷️</div>`;
+  shown.forEach(c => {
     const overdue = c.due <= now();
     const cloze = isCloze(c);
     const row = document.createElement('div');
     row.className = 'crow' + (cloze ? ' cloze-row' : '');
-    row.innerHTML = `<span class="q">${escapeHtml(cloze ? clozePlain(c.front) : c.front)}</span>
-      <span class="a">${escapeHtml(cloze ? (c.back || 'cloze') : c.back)}</span>
+    const tagChips = (c.tags || []).map(t => `<span class="tagchip">${escapeHtml(t)}</span>`).join('');
+    row.innerHTML = `<span class="q">${escapeHtml(plainText(c.front))}</span>
+      <span class="a">${escapeHtml(cloze ? (c.back ? plainText(c.back) : 'cloze') : plainText(c.back))} ${tagChips}</span>
       <span class="badge">${overdue ? 'due' : 'rep '+c.reps}</span>
       <div class="row-actions">
         <button class="edit" title="edit">✏️</button>
@@ -631,12 +825,12 @@ function startStudyAll() {
 // what the prompt / answer are for a unit (handles reverse + cloze)
 function unitIsCloze(u) { return u.dir === 'f' && isCloze(u.card); }
 function unitPromptHtml(u) {
-  if (unitIsCloze(u)) return clozeFront(u.card.front);
-  return escapeHtml(u.dir === 'f' ? u.card.front : u.card.back);
+  if (unitIsCloze(u)) return renderRich(u.card.front, false);
+  return renderRich(u.dir === 'f' ? u.card.front : u.card.back, false);
 }
 function unitAnswerHtml(u) {
-  if (unitIsCloze(u)) return clozeBack(u.card.front) + (u.card.back ? `<div class="note">${escapeHtml(u.card.back)}</div>` : '');
-  return escapeHtml(u.dir === 'f' ? u.card.back : u.card.front);
+  if (unitIsCloze(u)) return renderRich(u.card.front, true) + (u.card.back ? `<div class="note">${renderRich(u.card.back, false)}</div>` : '');
+  return renderRich(u.dir === 'f' ? u.card.back : u.card.front, false);
 }
 function unitExpected(u) { return u.dir === 'f' ? u.card.back : u.card.front; } // plain, for typed check
 function normAns(s) {
@@ -815,11 +1009,14 @@ $('#createDeck').onclick = () => {
   burst(12); renderHome();
 };
 
+const parseTags = str => [...new Set(String(str).split(/[\s,]+/).map(t => t.trim()).filter(Boolean))];
+
 let editingCard = null;
 function openCardModal(card) {
   editingCard = card || null;
   $('#cardFront').value = card ? card.front : '';
   $('#cardBack').value = card ? card.back : '';
+  $('#cardTags').value = card && card.tags ? card.tags.join(' ') : '';
   $('#cardModalTitle').textContent = card ? '✏️ Edit card' : '🃏 New card';
   $('#addCard').textContent = card ? 'Save changes' : 'Add & keep going ↵';
   $('#cardModal').classList.add('open');
@@ -829,19 +1026,39 @@ $('#addCard').onclick = addCardFn;
 function addCardFn() {
   const front = $('#cardFront').value.trim();
   const back = $('#cardBack').value.trim();
+  const tags = parseTags($('#cardTags').value);
   // back is optional for cloze cards (the blanks ARE the answer)
   if (!front || (!back && !CLOZE_RE.test(front))) { flash('Add a front + back (or a {{cloze}} blank) 🃏'); return; }
   if (editingCard) {
-    editingCard.front = front; editingCard.back = back;
+    editingCard.front = front; editingCard.back = back; editingCard.tags = tags;
     save(); $('#cardModal').classList.remove('open');
     editingCard = null; renderDeckHome(); flash('Card updated ✨'); return;
   }
-  currentDeck.cards.push({ id: rid(), front, back, ease: 2.5, interval: 0, reps: 0, due: now() });
+  currentDeck.cards.push({ id: rid(), front, back, tags, ease: 2.5, interval: 0, reps: 0, due: now() });
   save();
-  $('#cardFront').value = ''; $('#cardBack').value = '';
+  $('#cardFront').value = ''; $('#cardBack').value = ''; $('#cardTags').value = '';
   $('#cardFront').focus();
   burst(5); flash('Card planted 🌱');
 }
+
+//// ---------- media insert (image / audio) ----------
+let lastField = 'cardBack';
+['cardFront', 'cardBack'].forEach(id => $('#' + id).addEventListener('focus', () => lastField = id));
+function insertMedia(markup) {
+  const ta = $('#' + lastField), v = ta.value;
+  ta.value = v + (v && !v.endsWith('\n') ? '\n' : '') + markup;
+  ta.focus();
+}
+function fileToMarkup(file, kind) {
+  if (file.size > 900 * 1024) { flash('File too big — keep it under ~900 KB 📦'); return; }
+  const reader = new FileReader();
+  reader.onload = () => insertMedia(kind === 'img' ? `![](${reader.result})` : `@[audio](${reader.result})`);
+  reader.readAsDataURL(file);
+}
+$('#addImgBtn').onclick = () => $('#imgFile').click();
+$('#addAudBtn').onclick = () => $('#audFile').click();
+$('#imgFile').onchange = e => { if (e.target.files[0]) fileToMarkup(e.target.files[0], 'img'); e.target.value = ''; };
+$('#audFile').onchange = e => { if (e.target.files[0]) fileToMarkup(e.target.files[0], 'aud'); e.target.value = ''; };
 
 //// ---------- bulk import cards ----------
 function openImportCards() {
@@ -862,7 +1079,7 @@ function parseImport(text) {
     front = front.trim(); back = back.trim();
     if (!front) continue;
     if (!back && !CLOZE_RE.test(front)) continue; // skip incomplete basic cards
-    cards.push({ id: rid(), front, back, ease: 2.5, interval: 0, reps: 0, due: now() });
+    cards.push({ id: rid(), front, back, tags: [], ease: 2.5, interval: 0, reps: 0, due: now() });
   }
   return cards;
 }
@@ -961,6 +1178,12 @@ $('#exportBtn').onclick = exportBackup;
 $('#importBtn').onclick = () => $('#importFile').click();
 $('#importFile').onchange = (e) => {
   const file = e.target.files[0]; if (!file) return;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.apkg') || name.endsWith('.colpkg')) importApkg(file);
+  else importBackupFile(file);
+  e.target.value = '';
+};
+function importBackupFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     let data; try { data = JSON.parse(reader.result); } catch { flash("That file isn't valid JSON 🤔"); return; }
@@ -971,8 +1194,71 @@ $('#importFile').onchange = (e) => {
     burst(20); flash('Backup restored 🌷');
   };
   reader.readAsText(file);
-  e.target.value = '';
-};
+}
+
+//// ---------- Anki .apkg import (lazy-loads fflate + sql.js from CDN) ----------
+const _scripts = {};
+function loadScript(src) {
+  if (_scripts[src]) return _scripts[src];
+  return _scripts[src] = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('load ' + src));
+    document.head.appendChild(s);
+  });
+}
+// HTML field → plain text (with our media markup for images/sounds we can inline)
+function ankiStripHtml(html) {
+  let s = String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n');
+  s = s.replace(/<img[^>]*>/gi, '🖼').replace(/\[sound:[^\]]+\]/gi, '🔊').replace(/<[^>]+>/g, '');
+  const ta = document.createElement('textarea'); ta.innerHTML = s;
+  return ta.value.replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+// pure: rows of {flds, tags} → FlashPal card objects
+function notesToCards(rows) {
+  const cards = [];
+  for (const r of rows) {
+    const fields = String(r.flds || '').split('');
+    const front = ankiStripHtml(fields[0] || '');
+    const back = ankiStripHtml(fields.slice(1).join(' · ') || '');
+    if (!front && !back) continue;
+    const tags = String(r.tags || '').split(/\s+/).map(t => t.trim()).filter(Boolean);
+    cards.push({ id: rid(), front: front || '(blank)', back, tags, ease: 2.5, interval: 0, reps: 0, due: now() });
+  }
+  return cards;
+}
+async function importApkg(file) {
+  flash('Reading Anki package… ⏳');
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    await loadScript('https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js');
+    const files = fflate.unzipSync(buf);
+    // newest → oldest collection formats
+    let dbBytes = files['collection.anki21'] || files['collection.anki2'];
+    if (!dbBytes && files['collection.anki21b']) {
+      await loadScript('https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js');
+      dbBytes = fzstd.decompress(files['collection.anki21b']);
+    }
+    if (!dbBytes) throw new Error('no collection db inside package');
+    await loadScript('https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js');
+    const SQL = await initSqlJs({ locateFile: f => 'https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/' + f });
+    const db = new SQL.Database(dbBytes);
+    const res = db.exec('SELECT flds, tags FROM notes');
+    db.close();
+    if (!res.length) { flash('No notes found in that package 🤔'); return; }
+    const cols = res[0].columns;
+    const rows = res[0].values.map(v => ({ flds: v[cols.indexOf('flds')], tags: v[cols.indexOf('tags')] }));
+    const cards = notesToCards(rows);
+    if (!cards.length) { flash('No importable cards found 🤔'); return; }
+    const deckName = file.name.replace(/\.(apkg|colpkg)$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) || 'Imported';
+    state.decks.push({ id: rid(), emoji: '📦', name: deckName, cards,
+      opts: { newPerDay: 20, typed: false, reverse: 'off' }, intro: { date: todayStr(), count: 0 } });
+    save(); goHome(); burst(30);
+    flash(`Imported ${cards.length} card${cards.length === 1 ? '' : 's'} from Anki 📦`);
+  } catch (err) {
+    console.error(err);
+    flash('Could not read that .apkg — needs internet & a valid Anki export 🌐');
+  }
+}
 
 //// ---------- dark mode ----------
 const THEME_KEY = 'flashpal.theme';
@@ -985,6 +1271,23 @@ $('#themeBtn').onclick = () => {
   localStorage.setItem(THEME_KEY, next); applyTheme(next);
 };
 applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+
+//// ---------- global settings (scheduler + retention) ----------
+function renderSettings() {
+  $('#schedSeg').querySelectorAll('button').forEach(b =>
+    b.classList.toggle('sel', b.dataset.sched === state.settings.scheduler));
+  $('#retField').style.display = state.settings.scheduler === 'fsrs' ? '' : 'none';
+  $('#optRetention').value = Math.round(state.settings.retention * 100);
+  $('#retVal').textContent = Math.round(state.settings.retention * 100) + '%';
+}
+$('#settingsBtn').onclick = () => { renderSettings(); $('#settingsModal').classList.add('open'); };
+$('#schedSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  state.settings.scheduler = b.dataset.sched; save(); renderSettings();
+});
+$('#optRetention').oninput = (e) => {
+  state.settings.retention = (+e.target.value) / 100;
+  $('#retVal').textContent = e.target.value + '%'; save();
+};
 
 //// ---------- keyboard ----------
 document.addEventListener('keydown', e => {

@@ -8,13 +8,19 @@ dependencies, no server. Just open it and study.
 
 ## ✨ Features
 
-- **Real spaced repetition** — an SM-2-style scheduler tracks each card's ease,
-  interval and reps. Grade a card *Again / Hard / Good / Easy* and FlashPal shows
-  the next review interval right on the button (`<10m`, `1d`, `3d`, months, years…).
-- **Decks & cards** — create decks with a mascot emoji, add / **edit** / delete
-  cards, see per-deck "due" counts at a glance.
+- **Two schedulers** — modern **FSRS-4.5** (stability/difficulty model with a
+  tunable target-retention slider) or classic **SM-2**, switchable in Settings.
+  Either way the next interval is previewed on each grade button.
+- **Decks & sub-decks** — create decks with a mascot emoji; name one
+  `Spanish::Verbs` and it nests under a **Spanish** group with an aggregate
+  "study all" button.
+- **Cards** — add / **edit** / delete, with **images & audio** (pick a file or
+  paste `![](url)` / `@[audio](url)`) and **tags** (filter the deck by tag, or
+  study just one tag).
 - **Cloze deletions** — wrap any word in `{{double braces}}` and FlashPal blanks
   it on the front, revealing it on the back. Multiple blanks per card supported.
+- **Anki `.apkg` import** — drop in a real Anki export and FlashPal reads the
+  notes into a new deck (unzip + SQLite parsed in-browser; needs a connection).
 - **Typed-answer mode** — per deck, type the answer and FlashPal checks it
   (case-, accent- and punctuation-insensitive), then suggests a grade.
 - **Reverse cards** — per deck, add a back → front review for each basic card,
@@ -65,14 +71,18 @@ It ships with two demo decks (World Capitals, Fun Facts) so it's alive on first 
 
 ## 🧠 How the scheduler works
 
-Each card stores `ease` (default 2.5), `interval` (days) and `reps`. On review:
+Pick your algorithm in **Settings**:
 
-- **Again** → reps reset, interval → ~10 min, ease drops a little.
-- **Hard / Good / Easy** → reps increment; early reps step `1d → 3d`, then
-  `interval × ease` (nudged down for Hard, up for Easy). Ease floors at 1.3.
+- **FSRS-4.5** (default) — each card carries a memory **stability** `S` and
+  **difficulty** `D`. After a review FSRS estimates your recall probability and
+  picks the next interval so it lands at your **target retention** (default 90%;
+  raise it for more frequent reviews). This is the same model modern Anki uses.
+- **SM-2** (classic) — each card stores `ease` (2.5), `interval` and `reps`;
+  *Again* resets, *Hard/Good/Easy* step `1d → 3d → interval × ease`.
 
-Due cards are anything whose `due` timestamp is in the past. Simple, transparent,
-and entirely in `index.html` — read it, tweak it, make it yours.
+Reverse cards keep a **separate** schedule per direction. Due cards are anything
+whose `due` timestamp has passed (capped by each deck's new-cards-per-day limit).
+It's all plain JS in `index.html` — read it, tweak it, make it yours.
 
 ## 📄 License
 
