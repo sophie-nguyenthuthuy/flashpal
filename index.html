@@ -192,6 +192,8 @@
   .cheat > div:nth-child(even) { color: #6f6088; font-weight: 600; font-size: .92rem; }
   kbd { display: inline-block; background: #fff; border: 1px solid #d9ccf0; border-bottom-width: 2px; border-radius: 7px; padding: 2px 8px; font: 600 .82rem ui-monospace, monospace; color: var(--grape-d); margin: 0 1px; }
   body.dark kbd { background: #2b2547; border-color: #463c72; }
+  .opt-info { font-size: .82rem; color: #8a7aa6; font-weight: 600; }
+  body.dark .opt-info { color: #a89cce; }
   .seg { display: flex; gap: 8px; }
   .seg button { flex: 1; border: 2px solid #ece3ff; background: #fbf9ff; color: var(--ink); border-radius: 14px; padding: 12px; font-family: inherit; font-weight: 800; cursor: pointer; transition: all .12s; }
   .seg button small { font-weight: 600; color: #9a8bb0; }
@@ -499,6 +501,14 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       <label>Target retention — <b id="retVal">90%</b> <small>(higher = more reviews)</small></label>
       <input id="optRetention" type="range" min="70" max="97" step="1" />
     </div>
+    <div class="field" id="optimizeField">
+      <label>Personalize FSRS <small>(fit the 17 weights to your own review history)</small></label>
+      <div id="optimizeInfo" class="opt-info"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn grape sm" id="optimizeBtn">✨ Optimize from my reviews</button>
+        <button class="btn ghost sm hidden" id="resetWeightsBtn">Reset to default</button>
+      </div>
+    </div>
     <div class="field">
       <label>Leech threshold <small>(lapses before a card is flagged & suspended; 0 = off)</small></label>
       <input id="optLeech" type="number" min="0" max="99" />
@@ -564,6 +574,9 @@ function normalize(s) {
     s.settings.retention = 0.9;
   if (typeof s.settings.leech !== 'number' || s.settings.leech < 0) s.settings.leech = 8;
   if (typeof s.settings.autoSpeak !== 'boolean') s.settings.autoSpeak = false;
+  if (s.settings.weights && (!Array.isArray(s.settings.weights) || s.settings.weights.length !== 17 || s.settings.weights.some(x => !isFinite(x)))) {
+    delete s.settings.weights; delete s.settings.weightsInfo;
+  }
   for (const d of s.decks) {
     if (!Array.isArray(d.cards)) d.cards = [];
     if (!d.id) d.id = rid();
@@ -674,36 +687,97 @@ function sm2Schedule(s, grade) {
 }
 
 // --- FSRS-4.5 (free spaced repetition scheduler) ---
+// 17 default weights; a user can override via state.settings.weights (optimized from history)
 const FSRS_W = [0.4197,1.1869,3.0412,15.2441,7.1434,0.6477,1.0007,0.0674,1.6597,0.1712,1.1178,2.0225,0.0904,0.3025,2.1214,0.2498,2.9466];
 const FSRS_DECAY = -0.5;
 const FSRS_FACTOR = Math.pow(0.9, 1 / FSRS_DECAY) - 1;   // ≈ 19/81
+const activeW = () => (state.settings && Array.isArray(state.settings.weights) && state.settings.weights.length === 17) ? state.settings.weights : FSRS_W;
 const clampD = d => Math.min(10, Math.max(1, d));
-const fsrsR = (t, S) => Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);                 // retrievability after t days
+const fsrsR = (t, S) => Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);                 // retrievability after t days (weight-independent)
 const fsrsInterval = (S, ret) => (S / FSRS_FACTOR) * (Math.pow(ret, 1 / FSRS_DECAY) - 1);
-const fsrsS0 = G => Math.max(0.1, FSRS_W[G - 1]);
-const fsrsD0 = G => clampD(FSRS_W[4] - Math.exp(FSRS_W[5] * (G - 1)) + 1);
-const fsrsNextD = (D, G) => clampD(FSRS_W[7] * fsrsD0(4) + (1 - FSRS_W[7]) * (D - FSRS_W[6] * (G - 3)));
-function fsrsNextS(D, S, R, G) {
-  if (G === 1) return FSRS_W[11] * Math.pow(D, -FSRS_W[12]) * (Math.pow(S + 1, FSRS_W[13]) - 1) * Math.exp(FSRS_W[14] * (1 - R));
-  const hard = G === 2 ? FSRS_W[15] : 1, easy = G === 4 ? FSRS_W[16] : 1;
-  return S * (1 + Math.exp(FSRS_W[8]) * (11 - D) * Math.pow(S, -FSRS_W[9]) * (Math.exp(FSRS_W[10] * (1 - R)) - 1) * hard * easy);
+const fsrsS0 = (w, G) => Math.max(0.1, w[G - 1]);
+const fsrsD0 = (w, G) => clampD(w[4] - Math.exp(w[5] * (G - 1)) + 1);
+const fsrsNextD = (w, D, G) => clampD(w[7] * fsrsD0(w, 4) + (1 - w[7]) * (D - w[6] * (G - 3)));
+function fsrsNextS(w, D, S, R, G) {
+  if (G === 1) return w[11] * Math.pow(D, -w[12]) * (Math.pow(S + 1, w[13]) - 1) * Math.exp(w[14] * (1 - R));
+  const hard = G === 2 ? w[15] : 1, easy = G === 4 ? w[16] : 1;
+  return S * (1 + Math.exp(w[8]) * (11 - D) * Math.pow(S, -w[9]) * (Math.exp(w[10] * (1 - R)) - 1) * hard * easy);
 }
 function fsrsSchedule(s, grade) {
-  const G = grade + 1;
+  const G = grade + 1, w = activeW();
   const ret = (state.settings && state.settings.retention) || 0.9;
   if (s.reps === 0 || s.s == null) {                      // first exposure
-    s.d = fsrsD0(G); s.s = fsrsS0(G);
+    s.d = fsrsD0(w, G); s.s = fsrsS0(w, G);
   } else {
     const t = s.last ? Math.max(0, (now() - s.last) / DAY) : (s.interval || 0);
     const R = fsrsR(t, s.s);
-    s.d = fsrsNextD(s.d, G);
-    s.s = Math.max(0.1, fsrsNextS(s.d, s.s, R, G));
+    s.d = fsrsNextD(w, s.d, G);
+    s.s = Math.max(0.1, fsrsNextS(w, s.d, s.s, R, G));
   }
   s.reps += 1; s.last = now();
   let iv = grade === 0 ? 0 : Math.max(1, Math.round(fsrsInterval(s.s, ret)));
   s.interval = iv;
   s.due = now() + (iv === 0 ? 10 * 60 * 1000 : iv * DAY);
   return s;
+}
+
+// --- FSRS weight optimization from review history ---
+// reasonable per-weight bounds (keep the optimizer in a sane region)
+const FSRS_BOUNDS = [[0.05,10],[0.1,15],[0.1,30],[1,100],[1,10],[0.05,4],[0.05,4],[0,0.7],[0,5],[0.01,0.7],[0.05,4],[0.5,5],[0.01,0.5],[0.01,0.9],[0.5,5],[0.01,1],[0.5,6]];
+// build one review sequence per (card, direction) from the logs: [{dt: days-since-prev, g}]
+function fsrsTrainingSet() {
+  const seqs = [];
+  for (const d of state.decks) for (const c of d.cards) {
+    if (!c.log || c.log.length < 2) continue;
+    for (const dir of ['f', 'r']) {
+      const es = c.log.filter(e => (e.dir || 'f') === dir).sort((a, b) => a.t - b.t);
+      if (es.length < 2) continue;
+      seqs.push(es.map((e, i) => ({ dt: i === 0 ? 0 : Math.max(0, (e.t - es[i - 1].t) / DAY), g: e.g })));
+    }
+  }
+  return seqs;
+}
+const fsrsEligible = seqs => seqs.reduce((a, s) => a + (s.length - 1), 0); // reviews with a prior
+// mean binary cross-entropy: predicted recall vs actual (Again=forgot)
+function fsrsLoss(w, seqs) {
+  let loss = 0, n = 0;
+  for (const seq of seqs) {
+    let S, D;
+    for (let i = 0; i < seq.length; i++) {
+      const G = seq[i].g + 1;
+      if (i === 0) { S = fsrsS0(w, G); D = fsrsD0(w, G); continue; }
+      const R = fsrsR(seq[i].dt, S);
+      const Rc = Math.min(1 - 1e-6, Math.max(1e-6, R));
+      const label = seq[i].g === 0 ? 0 : 1;
+      loss += -(label * Math.log(Rc) + (1 - label) * Math.log(1 - Rc));
+      n++;
+      const nD = fsrsNextD(w, D, G);
+      S = Math.max(0.1, fsrsNextS(w, D, S, R, G)); D = nD;
+    }
+  }
+  return n ? loss / n : Infinity;
+}
+// coordinate descent with shrinking steps — robust and monotone
+function optimizeFsrs(seqs, rounds = 8) {
+  let w = activeW().slice(), best = fsrsLoss(w, seqs);
+  const before = best;
+  for (let r = 0; r < rounds; r++) {
+    for (let k = 0; k < w.length; k++) {
+      const range = FSRS_BOUNDS[k][1] - FSRS_BOUNDS[k][0];
+      let step = range * 0.1;
+      for (let t = 0; t < 7 && step > range * 1e-3; t++) {
+        let improved = false;
+        for (const dir of [1, -1]) {
+          const cand = w.slice();
+          cand[k] = Math.min(FSRS_BOUNDS[k][1], Math.max(FSRS_BOUNDS[k][0], w[k] + dir * step));
+          const L = fsrsLoss(cand, seqs);
+          if (L < best - 1e-9) { best = L; w = cand; improved = true; break; }
+        }
+        if (!improved) step /= 2;
+      }
+    }
+  }
+  return { w, before, after: best };
 }
 
 // forward-direction scheduler kept for compatibility
@@ -1581,13 +1655,41 @@ applyTheme(localStorage.getItem(THEME_KEY) || 'light');
 function renderSettings() {
   $('#schedSeg').querySelectorAll('button').forEach(b =>
     b.classList.toggle('sel', b.dataset.sched === state.settings.scheduler));
-  $('#retField').style.display = state.settings.scheduler === 'fsrs' ? '' : 'none';
+  const fsrs = state.settings.scheduler === 'fsrs';
+  $('#retField').style.display = fsrs ? '' : 'none';
+  $('#optimizeField').style.display = fsrs ? '' : 'none';
   $('#optRetention').value = Math.round(state.settings.retention * 100);
   $('#retVal').textContent = Math.round(state.settings.retention * 100) + '%';
   $('#optLeech').value = state.settings.leech;
   $('#optAutoSpeak').checked = state.settings.autoSpeak;
   $('#speakField').style.display = ttsOn() ? '' : 'none';
+  if (fsrs) {
+    const n = fsrsEligible(fsrsTrainingSet());
+    const custom = Array.isArray(state.settings.weights);
+    const i = state.settings.weightsInfo;
+    $('#optimizeInfo').innerHTML = custom
+      ? `<b style="color:var(--mint-d)">✓ Using your personalized weights</b>${i ? ` · loss ${i.before} → <b>${i.after}</b> from ${i.n} reviews` : ''}`
+      : `${n} eligible review${n === 1 ? '' : 's'} logged${n < 20 ? ` · aim for ~100+ for a meaningful fit` : ' — ready to optimize'}`;
+    $('#resetWeightsBtn').classList.toggle('hidden', !custom);
+    $('#optimizeBtn').textContent = custom ? '✨ Re-optimize' : '✨ Optimize from my reviews';
+  }
 }
+$('#optimizeBtn').onclick = () => {
+  const seqs = fsrsTrainingSet(), n = fsrsEligible(seqs);
+  if (n < 20) { flash(`Only ${n} eligible reviews — keep studying (aim for ~100+) 📈`); return; }
+  const btn = $('#optimizeBtn'); btn.textContent = 'Optimizing…'; btn.disabled = true;
+  setTimeout(() => {
+    const res = optimizeFsrs(seqs);
+    state.settings.weights = res.w.map(x => +x.toFixed(4));
+    state.settings.weightsInfo = { before: +res.before.toFixed(3), after: +res.after.toFixed(3), n, date: todayStr() };
+    save(); btn.disabled = false; renderSettings();
+    burst(20); flash(`Personalized! loss ${res.before.toFixed(3)} → ${res.after.toFixed(3)} 📉`);
+  }, 60);
+};
+$('#resetWeightsBtn').onclick = () => {
+  delete state.settings.weights; delete state.settings.weightsInfo;
+  save(); renderSettings(); flash('Reset to default FSRS weights');
+};
 $('#optLeech') && ($('#optLeech').onchange = e => {
   const n = parseInt(e.target.value, 10);
   state.settings.leech = Number.isFinite(n) && n >= 0 ? n : 8;

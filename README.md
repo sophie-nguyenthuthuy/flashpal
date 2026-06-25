@@ -101,6 +101,12 @@ Pick your algorithm in **Settings**:
 - **SM-2** (classic) — each card stores `ease` (2.5), `interval` and `reps`;
   *Again* resets, *Hard/Good/Easy* step `1d → 3d → interval × ease`.
 
+**Personalize FSRS** — once you've built up review history, **Settings → Optimize
+from my reviews** fits all 17 FSRS weights to *your* logs. It reconstructs each
+card's review timeline, then minimizes the binary cross-entropy between FSRS's
+predicted recall and what actually happened (coordinate descent, fully in-browser).
+You'll see the loss drop (e.g. `0.68 → 0.33`); reset to defaults anytime.
+
 Reverse cards keep a **separate** schedule per direction. Due cards are anything
 whose `due` timestamp has passed (capped by each deck's new-cards-per-day limit).
 It's all plain JS in `index.html` — read it, tweak it, make it yours.
