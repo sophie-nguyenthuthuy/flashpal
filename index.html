@@ -275,6 +275,14 @@
   body.dark .answers .abar .track { background: #322a52; }
   .answers .abar .fill { height: 100%; border-radius: 999px; transition: width .5s cubic-bezier(.5,1.6,.4,1); }
   .answers .abar .d { font-size: .78rem; font-weight: 800; }
+  .hardlist { display: flex; flex-direction: column; gap: 6px; }
+  .hard-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #faf7ff; border-radius: 12px; cursor: pointer; border-left: 4px solid var(--accent, var(--grape)); transition: transform .1s; }
+  .hard-row:hover { transform: translateX(3px); background: #f3eeff; }
+  body.dark .hard-row { background: #221d3c; } body.dark .hard-row:hover { background: #2b2547; }
+  .hard-row .hard-q { flex: 1; font-weight: 700; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hard-row .hard-deck { font-size: 1.1rem; }
+  .hard-row .hard-badge { background: #ffe2cf; color: #c4622a; font-size: .72rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  body.dark .hard-row .hard-badge { background: #4a2f1f; color: #ffb892; }
   .forecast { display: flex; align-items: flex-end; gap: 6px; height: 96px; }
   .fbar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; }
   .fbar .bar { width: 100%; background: linear-gradient(180deg, var(--pink), var(--grape)); border-radius: 8px 8px 4px 4px; min-height: 4px; transition: height .5s cubic-bezier(.5,1.6,.4,1); }
@@ -435,12 +443,17 @@
 <div class="modal-bg" id="importCardsModal">
   <div class="modal">
     <h2>📥 Bulk import cards</h2>
-    <p style="color:#9a8bb0;font-size:.85rem;margin:-8px 0 14px">One card per line. Split front/back with a <b>Tab</b>, <code>|</code>, or comma. Use <code>{{…}}</code> for cloze blanks (back optional).</p>
+    <p style="color:#9a8bb0;font-size:.85rem;margin:-8px 0 14px">One card per line. Split fields with a <b>Tab</b> or <code>|</code> (front · back · tags), or a comma (front · back). Use <code>{{…}}</code> for cloze blanks (back optional).</p>
     <div class="field">
-      <textarea id="importText" rows="9" placeholder="Capital of France | Paris
+      <textarea id="importText" rows="9" placeholder="Capital of France | Paris | geography europe
 bonjour, hello
 The {{mitochondria}} is the powerhouse of the cell"></textarea>
     </div>
+    <div class="media-bar">
+      <button type="button" class="btn ghost sm" id="loadCsvBtn">📄 Load .csv / .txt</button>
+      <span class="media-hint">a header row like <code>front,back,tags</code> is detected & skipped</span>
+    </div>
+    <input type="file" id="csvFile" accept=".csv,.tsv,.txt,text/csv,text/plain" class="hidden" />
     <div class="modal-actions">
       <button class="btn ghost" data-close>Cancel</button>
       <button class="btn mint" id="doImportCards">Import cards</button>
@@ -539,6 +552,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       <label class="opt-check"><input id="optAutoSpeak" type="checkbox" />
         <span><b>🔊 Auto-speak cards</b><small>Read the front aloud on show and the answer on flip (text-to-speech).</small></span></label>
     </div>
+    <div class="field">
+      <label class="opt-check"><input id="optSound" type="checkbox" />
+        <span><b>🔔 Sound effects</b><small>A soft tone when you grade a card and a chime when a session finishes.</small></span></label>
+    </div>
     <div class="modal-actions"><button class="btn grape" data-close>Done</button></div>
   </div>
 </div>
@@ -613,6 +630,7 @@ function normalize(s) {
     s.settings.retention = 0.9;
   if (typeof s.settings.leech !== 'number' || s.settings.leech < 0) s.settings.leech = 8;
   if (typeof s.settings.autoSpeak !== 'boolean') s.settings.autoSpeak = false;
+  if (typeof s.settings.sound !== 'boolean') s.settings.sound = false;
   if (s.settings.weights && (!Array.isArray(s.settings.weights) || s.settings.weights.length !== 17 || s.settings.weights.some(x => !isFinite(x)))) {
     delete s.settings.weights; delete s.settings.weightsInfo;
   }
@@ -1103,6 +1121,26 @@ function speakCurrent() {
 }
 function stopSpeech() { if (ttsOn()) speechSynthesis.cancel(); }
 
+//// ---------- sound effects (optional, Web Audio) ----------
+let _actx = null;
+function beep(freq, dur, type, vol) {
+  if (!state.settings.sound) return;
+  try {
+    _actx = _actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = _actx.createOscillator(), g = _actx.createGain(), t = _actx.currentTime;
+    o.type = type || 'sine'; o.frequency.value = freq;
+    o.connect(g); g.connect(_actx.destination);
+    g.gain.setValueAtTime(vol || 0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.12));
+    o.start(t); o.stop(t + (dur || 0.12) + 0.02);
+  } catch (e) {}
+}
+function soundGrade(grade) {                       // again low/buzzy, easy bright
+  const f = [196, 330, 440, 660][grade];
+  beep(f, grade === 0 ? 0.2 : 0.1, grade === 0 ? 'sawtooth' : 'sine', grade === 0 ? 0.1 : 0.14);
+}
+function soundFinish() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.16, 'triangle', 0.12), i * 90)); }
+
 // what the prompt / answer are for a unit (handles reverse + cloze)
 function unitIsCloze(u) { return u.dir === 'f' && isCloze(u.card); }
 function unitPromptHtml(u) {
@@ -1209,7 +1247,7 @@ function gradeCard(grade) {
     s.queue.shift();
     if (grade === 0) s.queue.push(u); else s.done++;
     if (grade === 3) burst(8);
-    palBounce(); renderCard(); return;
+    soundGrade(grade); palBounce(); renderCard(); return;
   }
   const prevSched = getSched(card, u.dir);
   const wasNew = prevSched.reps === 0;
@@ -1249,6 +1287,7 @@ function gradeCard(grade) {
   if (grade !== 0 || becameLeech) s.done++;
   save();
   if (grade === 3) burst(8);
+  soundGrade(grade);
   palBounce();
   renderCard();
 }
@@ -1275,6 +1314,7 @@ function finishSession() {
   burst(40);
   palCheer();
   stopSpeech();
+  soundFinish();
   $('#undoBtn').classList.add('hidden'); $('#speakBtn').classList.add('hidden');
   const peek = session.peek;
   const back = currentDeck ? `back to ${escapeHtml(currentDeck.name)}` : 'back to decks';
@@ -1437,21 +1477,32 @@ function openImportCards() {
 }
 function parseImport(text) {
   const cards = [];
-  for (const raw of text.split('\n')) {
+  const lines = text.split('\n');
+  // skip a header row like "front,back,tags"
+  if (lines.length && /^\s*front\s*[\t,|]\s*back/i.test(lines[0])) lines.shift();
+  for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    let front, back = '';
-    if (line.includes('\t')) { const i = line.indexOf('\t'); front = line.slice(0, i); back = line.slice(i + 1); }
-    else if (line.includes('|')) { const i = line.indexOf('|'); front = line.slice(0, i); back = line.slice(i + 1); }
+    let front, back = '', tagStr = '';
+    // Tab / pipe split into up to 3 fields (front · back · tags); comma stays 2-field
+    if (line.includes('\t')) { const p = line.split('\t'); front = p[0]; back = p[1] || ''; tagStr = p.slice(2).join(' '); }
+    else if (line.includes('|')) { const p = line.split('|'); front = p[0]; back = p[1] || ''; tagStr = p.slice(2).join(' '); }
     else if (line.includes(',') && !CLOZE_RE.test(line)) { const i = line.indexOf(','); front = line.slice(0, i); back = line.slice(i + 1); }
     else { front = line; } // cloze or front-only
     front = front.trim(); back = back.trim();
     if (!front) continue;
     if (!back && !CLOZE_RE.test(front)) continue; // skip incomplete basic cards
-    cards.push({ id: rid(), front, back, tags: [], ease: 2.5, interval: 0, reps: 0, due: now() });
+    cards.push({ id: rid(), front, back, tags: parseTags(tagStr), lapses: 0, suspended: false, log: [], ease: 2.5, interval: 0, reps: 0, due: now() });
   }
   return cards;
 }
+$('#loadCsvBtn').onclick = () => $('#csvFile').click();
+$('#csvFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { $('#importText').value = String(r.result).replace(/\r\n?/g, '\n'); flash('File loaded — review & import 📄'); };
+  r.readAsText(f); e.target.value = '';
+};
 $('#doImportCards').onclick = () => {
   const cards = parseImport($('#importText').value);
   if (!cards.length) { flash('No valid cards found 🤔'); return; }
@@ -1561,6 +1612,22 @@ function answerStats() {
   }
   return { dist, total: dist.reduce((a, b) => a + b, 0), reviewTotal, retention: reviewTotal ? reviewPass / reviewTotal : null };
 }
+// cards ranked by trouble: lapses first, then FSRS difficulty (or low ease)
+function hardestCards(limit = 6) {
+  const fsrs = state.settings.scheduler === 'fsrs';
+  const rows = [];
+  for (const d of state.decks) for (const c of d.cards) {
+    const reviews = (c.log || []).length;
+    if (reviews < 1) continue;
+    const f = getSched(c, 'f');
+    const diff = fsrs && f.d != null ? f.d : null;
+    const score = (c.lapses || 0) * 100 + (diff != null ? diff : (2.5 - (f.ease ?? 2.5)) * 4);
+    if ((c.lapses || 0) === 0 && score <= 0) continue;
+    rows.push({ c, d, lapses: c.lapses || 0, diff, reviews, score });
+  }
+  rows.sort((a, b) => b.score - a.score);
+  return rows.slice(0, limit);
+}
 function openStats() {
   const s = computeStats();
   const max = Math.max(1, ...s.forecast);
@@ -1572,6 +1639,13 @@ function openStats() {
   const aLabels = ['Again','Hard','Good','Easy'];
   const aColors = ['#ff5d6c','#ff9d4d','#38b886','#6f8bff'];
   const abars = a.dist.map((v,i) => `<div class="abar"><div class="v">${v}</div><div class="track"><div class="fill" style="width:0%;background:${aColors[i]}"></div></div><div class="d" style="color:${aColors[i]}">${aLabels[i]}</div></div>`).join('');
+  const hard = hardestCards(6);
+  const hardHtml = hard.length ? `<div class="fc-title">🔥 Hardest cards</div><div class="hardlist">${
+    hard.map(h => {
+      const tag = h.lapses ? `<span class="hard-badge">${h.lapses} lapse${h.lapses===1?'':'s'}</span>`
+        : (h.diff != null ? `<span class="hard-badge">diff ${h.diff.toFixed(1)}</span>` : '');
+      return `<div class="hard-row" style="--accent:${h.d.color}"><span class="hard-q">${escapeHtml(plainText(h.c.front))}</span><span class="hard-deck">${h.d.emoji}</span>${tag}</div>`;
+    }).join('')}</div>` : '';
   $('#statsBody').innerHTML = `
     <div class="stats-grid">
       <div class="stat due"><div class="n">${s.due}</div><div class="l">due now</div></div>
@@ -1585,9 +1659,12 @@ function openStats() {
     <div class="forecast">${bars}</div>
     <div class="fc-title">🎛️ Answer buttons <small style="font-weight:600;color:#9a8bb0">— ${a.total} review${a.total===1?'':'s'} total</small></div>
     <div class="answers">${abars}</div>
+    ${hardHtml}
     <div class="fc-title">🌱 Growth calendar — last 18 weeks</div>
     ${heatmapHtml()}`;
   $('#statsModal').classList.add('open');
+  // hardest-card rows jump to that card's info
+  $('#statsBody').querySelectorAll('.hard-row').forEach((row, i) => row.onclick = () => openCardInfo(hard[i].c, hard[i].d));
   requestAnimationFrame(() => {
     $('#statsBody').querySelectorAll('.bar').forEach((b,i) => b.style.height = Math.round((s.forecast[i]/max)*100) + '%');
     $('#statsBody').querySelectorAll('.abar .fill').forEach((b,i) => b.style.width = Math.round((a.dist[i]/aMax)*100) + '%');
@@ -1804,6 +1881,7 @@ function renderSettings() {
   $('#optLeech').value = state.settings.leech;
   $('#optAutoSpeak').checked = state.settings.autoSpeak;
   $('#speakField').style.display = ttsOn() ? '' : 'none';
+  $('#optSound').checked = state.settings.sound;
   if (fsrs) {
     const n = fsrsEligible(fsrsTrainingSet());
     const custom = Array.isArray(state.settings.weights);
@@ -1837,6 +1915,7 @@ $('#optLeech') && ($('#optLeech').onchange = e => {
   e.target.value = state.settings.leech; save();
 });
 $('#optAutoSpeak').onchange = e => { state.settings.autoSpeak = e.target.checked; save(); };
+$('#optSound').onchange = e => { state.settings.sound = e.target.checked; save(); if (e.target.checked) soundGrade(2); };
 $('#settingsBtn').onclick = () => { renderSettings(); $('#settingsModal').classList.add('open'); };
 
 //// ---------- custom study + cheatsheet ----------

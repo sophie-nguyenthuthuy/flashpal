@@ -49,14 +49,17 @@ dependencies, no server. Just open it and study.
   scheduled independently from the forward direction.
 - **Per-deck options** — a new-cards-per-day limit (so big decks don't bury you),
   plus the typed and reverse toggles, all under ⚙️ Options.
-- **Bulk import** — paste many cards at once, split by **Tab**, `|`, or comma
-  (cloze lines need no separator).
+- **Bulk import** — paste many cards or **load a `.csv`/`.txt`** file. Split by
+  **Tab** or `|` for three columns (front · back · tags), or a comma for two; a
+  `front,back,tags` header row is auto-detected; cloze lines need no separator.
 - **Study sessions** — shuffled due queue, *Again* cards loop back within the
   session, a progress bar, and "Study everything due" across all decks at once.
 - **Stats panel** — due / new / learning / mature counts, **true retention**
   (your pass rate on review cards), a 7-day "reviews due" forecast, an
-  **answer-button distribution** (Again/Hard/Good/Easy), and an 18-week activity
-  heatmap.
+  **answer-button distribution** (Again/Hard/Good/Easy), a **🔥 hardest-cards**
+  leaderboard (tap a card to inspect it), and an 18-week activity heatmap.
+- **Whimsy & feedback** — a bouncing 🦊 mascot, confetti, a daily ⚡ streak, and
+  optional **sound effects** (a tone on each grade, a chime on finish).
 - **Backup & restore** — export your whole garden to a JSON file and import it
   back on any device. No account, no cloud, no tracking.
 - **Dark mode** — a soft "night garden" theme, remembered across visits.
