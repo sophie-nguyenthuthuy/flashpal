@@ -11,7 +11,8 @@ dependencies, no server. Just open it and study.
 - **Two schedulers** — modern **FSRS-4.5** (stability/difficulty model with a
   tunable target-retention slider) or classic **SM-2**, switchable in Settings.
   Either way the next interval is previewed on each grade button.
-- **Decks & sub-decks** — create decks with a mascot emoji; name one
+- **Decks & sub-decks** — create decks with a mascot emoji and an **accent
+  colour** (tints the deck tile, due-pill and study card); name one
   `Spanish::Verbs` and it nests under a **Spanish** group with an aggregate
   "study all" button.
 - **Cards** — add / **edit** / delete, with **images & audio** (pick a file or
@@ -52,8 +53,10 @@ dependencies, no server. Just open it and study.
   (cloze lines need no separator).
 - **Study sessions** — shuffled due queue, *Again* cards loop back within the
   session, a progress bar, and "Study everything due" across all decks at once.
-- **Stats panel** — due / new / learning / mature counts, today's reviews, and a
-  7-day "reviews due" forecast chart.
+- **Stats panel** — due / new / learning / mature counts, **true retention**
+  (your pass rate on review cards), a 7-day "reviews due" forecast, an
+  **answer-button distribution** (Again/Hard/Good/Easy), and an 18-week activity
+  heatmap.
 - **Backup & restore** — export your whole garden to a JSON file and import it
   back on any device. No account, no cloud, no tracking.
 - **Dark mode** — a soft "night garden" theme, remembered across visits.

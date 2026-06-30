@@ -83,16 +83,17 @@
   .deck.sub h3 { font-size: 1.05rem; }
   .deck.sub .crumb { color: #c3b3e0; }
   .deck {
-    background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow);
+    background: var(--card); border-radius: 22px; padding: 20px 20px 20px 24px; box-shadow: var(--shadow);
     cursor: pointer; position: relative; overflow: hidden; transition: transform .15s ease;
     border: 2px solid transparent;
   }
-  .deck:hover { transform: translateY(-4px) rotate(.4deg); border-color: #ffe1ef; }
+  .deck::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: var(--accent, var(--grape)); }
+  .deck:hover { transform: translateY(-4px) rotate(.4deg); border-color: var(--accent, #ffe1ef); }
   .deck .emoji { font-size: 2.4rem; display: block; margin-bottom: 8px; }
   .deck h3 { margin: 0 0 4px; font-size: 1.2rem; }
   .deck .meta { color: #a596bd; font-size: .85rem; }
   .deck .due-pill {
-    position: absolute; top: 14px; right: 14px; background: var(--pink); color: #fff;
+    position: absolute; top: 14px; right: 14px; background: var(--accent, var(--pink)); color: #fff;
     font-size: .75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; box-shadow: var(--shadow-sm);
   }
   .deck .due-pill.zero { background: #d9eee2; color: var(--mint-d); }
@@ -128,7 +129,7 @@
   }
   .face .corner { position: absolute; top: 16px; left: 20px; font-size: .8rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #cdbfe6; }
   .face .txt { font-size: 1.5rem; font-weight: 700; line-height: 1.35; }
-  .face.front { border-top: 6px solid var(--grape); }
+  .face.front { border-top: 6px solid var(--accent, var(--grape)); }
   .face.back { transform: rotateY(180deg); border-top: 6px solid var(--mint); background: linear-gradient(180deg, #fff, #f6fffb); }
   .hint { color: #b7a9cd; font-size: .85rem; margin-top: 18px; }
 
@@ -236,6 +237,10 @@
   .emoji-pick { display: flex; gap: 6px; flex-wrap: wrap; }
   .emoji-pick button { font-size: 1.4rem; background: #f6f1ff; border: 2px solid transparent; border-radius: 12px; cursor: pointer; padding: 6px 8px; }
   .emoji-pick button.sel { border-color: var(--grape); background: #fff; }
+  .color-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-pick button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; transition: transform .1s; }
+  .color-pick button:hover { transform: scale(1.12); }
+  .color-pick button.sel { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
 
   /* confetti */
@@ -263,6 +268,13 @@
   .stat.new .n { color: var(--sky); } .stat.learn .n { color: var(--sun); }
   .stat.mature .n { color: var(--mint-d); } .stat.due .n { color: var(--pink-d); }
   .fc-title { font-weight: 800; margin: 22px 0 6px; font-size: .95rem; }
+  .answers { display: flex; flex-direction: column; gap: 8px; }
+  .answers .abar { display: grid; grid-template-columns: 38px 1fr 52px; align-items: center; gap: 10px; }
+  .answers .abar .v { font-weight: 800; font-size: .85rem; text-align: right; color: #6f6088; }
+  .answers .abar .track { height: 14px; background: #efe6ff; border-radius: 999px; overflow: hidden; }
+  body.dark .answers .abar .track { background: #322a52; }
+  .answers .abar .fill { height: 100%; border-radius: 999px; transition: width .5s cubic-bezier(.5,1.6,.4,1); }
+  .answers .abar .d { font-size: .78rem; font-weight: 800; }
   .forecast { display: flex; align-items: flex-end; gap: 6px; height: 96px; }
   .fbar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; }
   .fbar .bar { width: 100%; background: linear-gradient(180deg, var(--pink), var(--grape)); border-radius: 8px 8px 4px 4px; min-height: 4px; transition: height .5s cubic-bezier(.5,1.6,.4,1); }
@@ -373,6 +385,10 @@
     <div class="field">
       <label>Deck name</label>
       <input id="deckName" placeholder="e.g. Spanish, or Spanish::Verbs for a sub-deck" maxlength="60" />
+    </div>
+    <div class="field">
+      <label>Accent colour</label>
+      <div class="color-pick" id="deckColorPick"></div>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Cancel</button>
@@ -536,6 +552,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       <input id="optDeckName" maxlength="60" />
     </div>
     <div class="field">
+      <label>Accent colour</label>
+      <div class="color-pick" id="optColorPick"></div>
+    </div>
+    <div class="field">
       <label>New cards per day</label>
       <input id="optNewPerDay" type="number" min="0" max="999" />
     </div>
@@ -572,6 +592,11 @@ const todayStr = () => new Date().toISOString().slice(0,10);
 const now = () => Date.now();
 const DAY = 86400000;
 
+// deck accent palette
+const DECK_COLORS = ['#e95fa0','#8a6fe0','#38b886','#ff9d4d','#5b8def','#e0567a','#27b3c9','#b07ad0'];
+const isHex = c => /^#[0-9a-f]{6}$/i.test(c || '');
+function colorFor(name) { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return DECK_COLORS[h % DECK_COLORS.length]; }
+
 let state = normalize(load()) || normalize(seed());
 
 // repair partial/legacy/hand-edited storage so the app never throws on bad shape
@@ -596,6 +621,7 @@ function normalize(s) {
     if (!d.id) d.id = rid();
     if (typeof d.emoji !== 'string') d.emoji = '📚';
     if (typeof d.name !== 'string') d.name = 'Untitled';
+    if (!isHex(d.color)) d.color = colorFor(d.name);
     // per-deck study options
     if (!d.opts || typeof d.opts !== 'object') d.opts = {};
     if (typeof d.opts.newPerDay !== 'number' || d.opts.newPerDay < 0) d.opts.newPerDay = 20;
@@ -887,6 +913,7 @@ function deckCard(deck, sub) {
   const title = sub ? deck.name.split('::').slice(1).join('::') : deck.name;
   const el = document.createElement('div');
   el.className = 'deck' + (sub ? ' sub' : '');
+  el.style.setProperty('--accent', deck.color || colorFor(deck.name));
   el.innerHTML = `
     <span class="due-pill ${due ? '' : 'zero'}">${due ? due + ' due' : 'all done ✓'}</span>
     <span class="emoji">${deck.emoji}</span>
@@ -1104,6 +1131,7 @@ function renderCard() {
   // typed mode applies to basic cards only (cloze stays flip-to-reveal)
   const typed = s.typed && !unitIsCloze(u);
   const corner = unitIsCloze(u) ? 'cloze' : (u.dir === 'r' ? 'reverse ↩' : 'front');
+  $('#study').style.setProperty('--accent', (u.deck && u.deck.color) || '#8a6fe0');
   $('#studyBody').innerHTML = `
     <div class="scene">
       <div class="flip" id="flip">
@@ -1298,8 +1326,21 @@ function flash(msg) {
 //// ---------- modals ----------
 const deckEmojis = ['🌍','🦊','📚','🎸','🧪','🇪🇸','🧠','🍜','🎨','💻','🩺','♟️'];
 let pickedEmoji = deckEmojis[0];
+// render colour swatches into a picker; calls onPick with the chosen hex
+function renderColorPick(el, selected, onPick) {
+  el.innerHTML = '';
+  DECK_COLORS.forEach(col => {
+    const b = document.createElement('button');
+    b.style.background = col; b.title = col;
+    if (col.toLowerCase() === String(selected).toLowerCase()) b.classList.add('sel');
+    b.onclick = () => { el.querySelectorAll('button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); onPick(col); };
+    el.appendChild(b);
+  });
+}
+let pickedColor = DECK_COLORS[0];
 function openDeckModal() {
   pickedEmoji = deckEmojis[0];
+  pickedColor = DECK_COLORS[0];
   const pick = $('#emojiPick');
   pick.innerHTML = '';
   deckEmojis.forEach((e,i) => {
@@ -1308,6 +1349,7 @@ function openDeckModal() {
     b.onclick = () => { pickedEmoji = e; pick.querySelectorAll('button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
     pick.appendChild(b);
   });
+  renderColorPick($('#deckColorPick'), pickedColor, c => pickedColor = c);
   $('#deckName').value = '';
   $('#deckModal').classList.add('open');
   setTimeout(() => $('#deckName').focus(), 50);
@@ -1315,7 +1357,7 @@ function openDeckModal() {
 $('#createDeck').onclick = () => {
   const name = $('#deckName').value.trim();
   if (!name) { $('#deckName').focus(); return; }
-  state.decks.push({ id: rid(), emoji: pickedEmoji, name, cards: [],
+  state.decks.push({ id: rid(), emoji: pickedEmoji, name, color: pickedColor, cards: [],
     opts: { newPerDay: 20, typed: false, reverse: 'off' }, intro: { date: todayStr(), count: 0 } });
   save(); $('#deckModal').classList.remove('open');
   burst(12); renderHome();
@@ -1433,6 +1475,7 @@ function renderDeckFsrs() {
   $('#deckResetWeightsBtn').classList.toggle('hidden', !custom);
   $('#deckOptimizeBtn').textContent = custom ? '✨ Re-optimize' : '✨ Optimize this deck';
 }
+let editDeckColor = null;
 function openDeckOpts() {
   const o = currentDeck.opts;
   $('#deckOptsTitle').textContent = `⚙️ ${currentDeck.emoji} ${currentDeck.name}`;
@@ -1440,6 +1483,8 @@ function openDeckOpts() {
   $('#optNewPerDay').value = o.newPerDay;
   $('#optTyped').checked = o.typed;
   $('#optReverse').checked = o.reverse === 'both';
+  editDeckColor = currentDeck.color || colorFor(currentDeck.name);
+  renderColorPick($('#optColorPick'), editDeckColor, c => editDeckColor = c);
   renderDeckFsrs();
   $('#deckOptsModal').classList.add('open');
 }
@@ -1468,6 +1513,7 @@ $('#saveDeckOpts').onclick = () => {
   o.newPerDay = Number.isFinite(n) && n >= 0 ? n : 20;
   o.typed = $('#optTyped').checked;
   o.reverse = $('#optReverse').checked ? 'both' : 'off';
+  if (isHex(editDeckColor)) currentDeck.color = editDeckColor;
   save(); $('#deckOptsModal').classList.remove('open');
   renderDeckHome(); flash('Options saved ⚙️');
 };
@@ -1506,11 +1552,26 @@ function computeStats() {
   s.forecast = fc;
   return s;
 }
+// answer-button distribution + true retention (pass rate on non-first reviews)
+function answerStats() {
+  const dist = [0, 0, 0, 0]; let reviewTotal = 0, reviewPass = 0;
+  for (const d of state.decks) for (const c of d.cards) {
+    const log = c.log || [];
+    log.forEach((e, i) => { if (e.g >= 0 && e.g <= 3) dist[e.g]++; if (i > 0) { reviewTotal++; if (e.g > 0) reviewPass++; } });
+  }
+  return { dist, total: dist.reduce((a, b) => a + b, 0), reviewTotal, retention: reviewTotal ? reviewPass / reviewTotal : null };
+}
 function openStats() {
   const s = computeStats();
   const max = Math.max(1, ...s.forecast);
   const labels = ['Today','+1','+2','+3','+4','+5','+6'];
   const bars = s.forecast.map((v,i) => `<div class="fbar"><div class="v">${v}</div><div class="bar" style="height:0%"></div><div class="d">${labels[i]}</div></div>`).join('');
+  const a = answerStats();
+  const retCell = a.retention == null ? '—' : Math.round(a.retention * 100) + '%';
+  const aMax = Math.max(1, ...a.dist);
+  const aLabels = ['Again','Hard','Good','Easy'];
+  const aColors = ['#ff5d6c','#ff9d4d','#38b886','#6f8bff'];
+  const abars = a.dist.map((v,i) => `<div class="abar"><div class="v">${v}</div><div class="track"><div class="fill" style="width:0%;background:${aColors[i]}"></div></div><div class="d" style="color:${aColors[i]}">${aLabels[i]}</div></div>`).join('');
   $('#statsBody').innerHTML = `
     <div class="stats-grid">
       <div class="stat due"><div class="n">${s.due}</div><div class="l">due now</div></div>
@@ -1518,14 +1579,19 @@ function openStats() {
       <div class="stat learn"><div class="n">${s.learn}</div><div class="l">learning</div></div>
       <div class="stat mature"><div class="n">${s.mature}</div><div class="l">mature</div></div>
       <div class="stat"><div class="n">${s.total}</div><div class="l">total cards</div></div>
-      <div class="stat"><div class="n">${s.reviews}</div><div class="l">today's reviews</div></div>
+      <div class="stat"><div class="n">${retCell}</div><div class="l">true retention</div></div>
     </div>
     <div class="fc-title">🌤️ Reviews due — next 7 days</div>
     <div class="forecast">${bars}</div>
+    <div class="fc-title">🎛️ Answer buttons <small style="font-weight:600;color:#9a8bb0">— ${a.total} review${a.total===1?'':'s'} total</small></div>
+    <div class="answers">${abars}</div>
     <div class="fc-title">🌱 Growth calendar — last 18 weeks</div>
     ${heatmapHtml()}`;
   $('#statsModal').classList.add('open');
-  requestAnimationFrame(() => $('#statsBody').querySelectorAll('.bar').forEach((b,i) => b.style.height = Math.round((s.forecast[i]/max)*100) + '%'));
+  requestAnimationFrame(() => {
+    $('#statsBody').querySelectorAll('.bar').forEach((b,i) => b.style.height = Math.round((s.forecast[i]/max)*100) + '%');
+    $('#statsBody').querySelectorAll('.abar .fill').forEach((b,i) => b.style.width = Math.round((a.dist[i]/aMax)*100) + '%');
+  });
 }
 $('#statsBtn').onclick = openStats;
 
