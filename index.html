@@ -163,6 +163,9 @@
   .ci-v { font-weight: 700; font-size: .9rem; text-align: right; }
   .spark { background: #f7f3ff; border-radius: 14px; padding: 6px; }
   body.dark .spark { background: #1f1a38; }
+  .curve { background: #f7f3ff; border-radius: 14px; padding: 6px; }
+  body.dark .curve { background: #1f1a38; }
+  .cl-lab { font: 600 10px ui-sans-serif, sans-serif; }
   /* suspended / leech */
   .crow.suspended { opacity: .6; }
   .crow .badge.off { background: #f0e9f5; color: #b0a3c4; }
@@ -434,7 +437,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
   <div class="modal" style="max-width:540px">
     <h2>📊 Your garden stats</h2>
     <div id="statsBody"></div>
-    <div class="modal-actions"><button class="btn grape" data-close>Lovely ✦</button></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="exportCsvBtn">⬇️ Review history (CSV)</button>
+      <button class="btn grape" data-close>Lovely ✦</button>
+    </div>
   </div>
 </div>
 
@@ -541,6 +547,14 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       <label class="opt-check"><input id="optReverse" type="checkbox" />
         <span><b>↔ Also study reverse</b><small>Adds a back → front review for each basic card, scheduled separately.</small></span></label>
     </div>
+    <div class="field" id="deckFsrsField">
+      <label>FSRS weights for this deck <small>(overrides the global ones)</small></label>
+      <div id="deckOptInfo" class="opt-info"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn grape sm" id="deckOptimizeBtn">✨ Optimize this deck</button>
+        <button class="btn ghost sm hidden" id="deckResetWeightsBtn">Use global</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close>Cancel</button>
       <button class="btn grape" id="saveDeckOpts">Save</button>
@@ -587,6 +601,9 @@ function normalize(s) {
     if (typeof d.opts.newPerDay !== 'number' || d.opts.newPerDay < 0) d.opts.newPerDay = 20;
     if (typeof d.opts.typed !== 'boolean') d.opts.typed = false;
     if (d.opts.reverse !== 'both') d.opts.reverse = 'off';
+    if (d.opts.weights && !(Array.isArray(d.opts.weights) && d.opts.weights.length === 17 && d.opts.weights.every(x => isFinite(x)))) {
+      delete d.opts.weights; delete d.opts.weightsInfo;
+    }
     // daily new-card counter (resets each calendar day)
     if (!d.intro || d.intro.date !== todayStr()) d.intro = { date: todayStr(), count: 0 };
     for (const c of d.cards) {
@@ -664,8 +681,8 @@ function plainText(text) {
 //// ---------- scheduler ----------
 // grade: 0=again 1=hard 2=good 3=easy.  A "sched" is {ease, interval, reps, due, s, d, last}.
 // scheduleObj mutates it in place, branching on the chosen algorithm.
-function scheduleObj(s, grade) {
-  return (state.settings && state.settings.scheduler === 'sm2') ? sm2Schedule(s, grade) : fsrsSchedule(s, grade);
+function scheduleObj(s, grade, deck) {
+  return (state.settings && state.settings.scheduler === 'sm2') ? sm2Schedule(s, grade) : fsrsSchedule(s, grade, deck);
 }
 
 // --- SM-2 ---
@@ -691,7 +708,10 @@ function sm2Schedule(s, grade) {
 const FSRS_W = [0.4197,1.1869,3.0412,15.2441,7.1434,0.6477,1.0007,0.0674,1.6597,0.1712,1.1178,2.0225,0.0904,0.3025,2.1214,0.2498,2.9466];
 const FSRS_DECAY = -0.5;
 const FSRS_FACTOR = Math.pow(0.9, 1 / FSRS_DECAY) - 1;   // ≈ 19/81
-const activeW = () => (state.settings && Array.isArray(state.settings.weights) && state.settings.weights.length === 17) ? state.settings.weights : FSRS_W;
+const validW = a => Array.isArray(a) && a.length === 17 && a.every(x => isFinite(x));
+// per-deck weights win over global, which win over the FSRS-4.5 defaults
+const activeW = (deck) => (deck && deck.opts && validW(deck.opts.weights)) ? deck.opts.weights
+  : (state.settings && validW(state.settings.weights)) ? state.settings.weights : FSRS_W;
 const clampD = d => Math.min(10, Math.max(1, d));
 const fsrsR = (t, S) => Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);                 // retrievability after t days (weight-independent)
 const fsrsInterval = (S, ret) => (S / FSRS_FACTOR) * (Math.pow(ret, 1 / FSRS_DECAY) - 1);
@@ -703,8 +723,8 @@ function fsrsNextS(w, D, S, R, G) {
   const hard = G === 2 ? w[15] : 1, easy = G === 4 ? w[16] : 1;
   return S * (1 + Math.exp(w[8]) * (11 - D) * Math.pow(S, -w[9]) * (Math.exp(w[10] * (1 - R)) - 1) * hard * easy);
 }
-function fsrsSchedule(s, grade) {
-  const G = grade + 1, w = activeW();
+function fsrsSchedule(s, grade, deck) {
+  const G = grade + 1, w = activeW(deck);
   const ret = (state.settings && state.settings.retention) || 0.9;
   if (s.reps === 0 || s.s == null) {                      // first exposure
     s.d = fsrsD0(w, G); s.s = fsrsS0(w, G);
@@ -725,9 +745,9 @@ function fsrsSchedule(s, grade) {
 // reasonable per-weight bounds (keep the optimizer in a sane region)
 const FSRS_BOUNDS = [[0.05,10],[0.1,15],[0.1,30],[1,100],[1,10],[0.05,4],[0.05,4],[0,0.7],[0,5],[0.01,0.7],[0.05,4],[0.5,5],[0.01,0.5],[0.01,0.9],[0.5,5],[0.01,1],[0.5,6]];
 // build one review sequence per (card, direction) from the logs: [{dt: days-since-prev, g}]
-function fsrsTrainingSet() {
+function fsrsTrainingSet(decks) {
   const seqs = [];
-  for (const d of state.decks) for (const c of d.cards) {
+  for (const d of (decks || state.decks)) for (const c of d.cards) {
     if (!c.log || c.log.length < 2) continue;
     for (const dir of ['f', 'r']) {
       const es = c.log.filter(e => (e.dir || 'f') === dir).sort((a, b) => a.t - b.t);
@@ -804,7 +824,7 @@ function intervalLabel(card, grade) {           // forward-only (used in tests)
   const tmp = { ...card }; scheduleObj(tmp, grade); return fmtInterval(tmp.interval);
 }
 function unitLabel(u, grade) {                   // direction-aware
-  const tmp = getSched(u.card, u.dir); scheduleObj(tmp, grade); return fmtInterval(tmp.interval);
+  const tmp = getSched(u.card, u.dir); scheduleObj(tmp, grade, u.deck); return fmtInterval(tmp.interval);
 }
 
 //// ---------- review units (card × direction), honoring deck options ----------
@@ -1175,7 +1195,7 @@ function gradeCard(grade) {
   });
   s.queue.shift();
   const sc = getSched(card, u.dir);
-  scheduleObj(sc, grade);
+  scheduleObj(sc, grade, u.deck);
   setSched(card, u.dir, sc);
   // review log (capped)
   (card.log = card.log || []).push({ t: now(), g: grade, dir: u.dir });
@@ -1400,6 +1420,19 @@ $('#doImportCards').onclick = () => {
 };
 
 //// ---------- deck options ----------
+function renderDeckFsrs() {
+  const d = currentDeck;
+  const fsrs = state.settings.scheduler === 'fsrs';
+  $('#deckFsrsField').style.display = fsrs ? '' : 'none';
+  if (!fsrs) return;
+  const n = fsrsEligible(fsrsTrainingSet([d]));
+  const custom = validW(d.opts.weights), i = d.opts.weightsInfo;
+  $('#deckOptInfo').innerHTML = custom
+    ? `<b style="color:var(--mint-d)">✓ Using this deck's own weights</b>${i ? ` · loss ${i.before} → <b>${i.after}</b> from ${i.n} reviews` : ''}`
+    : `${n} eligible review${n === 1 ? '' : 's'} in this deck${n < 20 ? ' · aim for ~100+' : ' — ready'}`;
+  $('#deckResetWeightsBtn').classList.toggle('hidden', !custom);
+  $('#deckOptimizeBtn').textContent = custom ? '✨ Re-optimize' : '✨ Optimize this deck';
+}
 function openDeckOpts() {
   const o = currentDeck.opts;
   $('#deckOptsTitle').textContent = `⚙️ ${currentDeck.emoji} ${currentDeck.name}`;
@@ -1407,8 +1440,26 @@ function openDeckOpts() {
   $('#optNewPerDay').value = o.newPerDay;
   $('#optTyped').checked = o.typed;
   $('#optReverse').checked = o.reverse === 'both';
+  renderDeckFsrs();
   $('#deckOptsModal').classList.add('open');
 }
+$('#deckOptimizeBtn').onclick = () => {
+  const d = currentDeck;
+  const seqs = fsrsTrainingSet([d]), n = fsrsEligible(seqs);
+  if (n < 20) { flash(`Only ${n} reviews in this deck — keep studying 📈`); return; }
+  const btn = $('#deckOptimizeBtn'); btn.textContent = 'Optimizing…'; btn.disabled = true;
+  setTimeout(() => {
+    const res = optimizeFsrs(seqs);
+    d.opts.weights = res.w.map(x => +x.toFixed(4));
+    d.opts.weightsInfo = { before: +res.before.toFixed(3), after: +res.after.toFixed(3), n, date: todayStr() };
+    save(); btn.disabled = false; renderDeckFsrs();
+    burst(20); flash(`Deck personalized! loss ${res.before.toFixed(3)} → ${res.after.toFixed(3)} 📉`);
+  }, 60);
+};
+$('#deckResetWeightsBtn').onclick = () => {
+  delete currentDeck.opts.weights; delete currentDeck.opts.weightsInfo;
+  save(); renderDeckFsrs(); flash('Deck now uses the global weights');
+};
 $('#saveDeckOpts').onclick = () => {
   const o = currentDeck.opts;
   const newName = $('#optDeckName').value.trim();
@@ -1521,6 +1572,30 @@ function exportBackup() {
   flash('Backup downloaded ⬇️');
 }
 $('#exportBtn').onclick = exportBackup;
+
+function downloadFile(text, name, mime) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const csvCell = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// flatten every logged review into rows: deck, front, direction, when, grade
+function buildHistoryCsv() {
+  const G = ['again', 'hard', 'good', 'easy'];
+  const rows = [['deck', 'card_front', 'direction', 'reviewed_at', 'grade', 'grade_label']];
+  for (const d of state.decks) for (const c of d.cards) for (const e of (c.log || [])) {
+    rows.push([d.name, plainText(c.front), e.dir || 'f', new Date(e.t).toISOString(), e.g, G[e.g] || e.g]);
+  }
+  return { csv: rows.map(r => r.map(csvCell).join(',')).join('\n'), count: rows.length - 1 };
+}
+$('#exportCsvBtn').onclick = () => {
+  const { csv, count } = buildHistoryCsv();
+  if (!count) { flash('No review history yet 🌱'); return; }
+  downloadFile(csv, 'flashpal-reviews-' + todayStr() + '.csv', 'text/csv');
+  flash(`Exported ${count} review${count === 1 ? '' : 's'} ⬇️`);
+};
 $('#importBtn').onclick = () => $('#importFile').click();
 $('#importFile').onchange = (e) => {
   const file = e.target.files[0]; if (!file) return;
@@ -1749,6 +1824,32 @@ function sparkline(log) {
   });
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="100%"><path d="${path}" fill="none" stroke="#cdbfe6" stroke-width="2"/>${dots}</svg>`;
 }
+// FSRS forgetting curve: retention R(t) for a card's current stability,
+// with the target-retention line and the resulting next interval marked.
+function forgettingCurve(S) {
+  const ret = (state.settings && state.settings.retention) || 0.9;
+  const iv = Math.max(1, fsrsInterval(S, ret));        // days until R hits target
+  const span = Math.max(iv * 1.8, 2);                  // x-axis range (days)
+  const W = 440, H = 110, padL = 30, padB = 20, padT = 8, padR = 8;
+  const px = t => padL + (t / span) * (W - padL - padR);
+  const py = r => padT + (1 - r) * (H - padT - padB);
+  let path = '';
+  for (let i = 0; i <= 60; i++) { const t = span * i / 60; path += (i ? 'L' : 'M') + px(t).toFixed(1) + ' ' + py(fsrsR(t, S)).toFixed(1) + ' '; }
+  const ty = py(ret);
+  const ix = px(iv);
+  return `<svg class="curve" viewBox="0 0 ${W} ${H}" width="100%">
+    <line x1="${padL}" y1="${py(1)}" x2="${padL}" y2="${py(0)}" stroke="#e3d8f5"/>
+    <line x1="${padL}" y1="${py(0)}" x2="${W - padR}" y2="${py(0)}" stroke="#e3d8f5"/>
+    <line x1="${padL}" y1="${ty.toFixed(1)}" x2="${W - padR}" y2="${ty.toFixed(1)}" stroke="#ffb3cb" stroke-dasharray="4 4"/>
+    <text x="${padL + 4}" y="${ty - 4}" class="cl-lab" fill="#e07a9c">target ${Math.round(ret * 100)}%</text>
+    <path d="${path}" fill="none" stroke="var(--grape)" stroke-width="2.5"/>
+    <line x1="${ix.toFixed(1)}" y1="${padT}" x2="${ix.toFixed(1)}" y2="${py(0)}" stroke="#bcaedb" stroke-dasharray="3 3"/>
+    <circle cx="${ix.toFixed(1)}" cy="${ty.toFixed(1)}" r="4" fill="var(--grape)"/>
+    <text x="${Math.min(ix + 6, W - 60)}" y="${py(0) - 5}" class="cl-lab" fill="#9a8bb0">next: ${fmtInterval(Math.round(iv))}</text>
+    <text x="${padL - 6}" y="${py(1) + 4}" class="cl-lab" fill="#9a8bb0" text-anchor="end">100%</text>
+    <text x="${padL - 6}" y="${py(0)}" class="cl-lab" fill="#9a8bb0" text-anchor="end">0%</text>
+  </svg>`;
+}
 function openCardInfo(card, deck) {
   const f = getSched(card, 'f');
   const fsrs = state.settings.scheduler === 'fsrs';
@@ -1771,9 +1872,12 @@ function openCardInfo(card, deck) {
     const r = getSched(card, 'r');
     rows.push(['Reverse', `${fmtInterval(r.interval)} · ${r.reps === 0 ? 'new' : 'rep ' + r.reps}`]);
   }
+  const curve = (fsrs && f.s != null && f.reps > 0)
+    ? `<div class="fc-title">📉 Forgetting curve</div>${forgettingCurve(f.s)}` : '';
   $('#cardInfoBody').innerHTML =
     `<div class="ci-front">${renderRich(card.front, false)}</div>
      <div class="ci-grid">${rows.map(([k, v]) => `<div class="ci-k">${k}</div><div class="ci-v">${v}</div>`).join('')}</div>
+     ${curve}
      <div class="fc-title">Recent grades</div>${sparkline(card.log)}`;
   $('#cardInfoModal').classList.add('open');
 }

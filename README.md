@@ -105,7 +105,14 @@ Pick your algorithm in **Settings**:
 from my reviews** fits all 17 FSRS weights to *your* logs. It reconstructs each
 card's review timeline, then minimizes the binary cross-entropy between FSRS's
 predicted recall and what actually happened (coordinate descent, fully in-browser).
-You'll see the loss drop (e.g. `0.68 → 0.33`); reset to defaults anytime.
+You'll see the loss drop (e.g. `0.68 → 0.33`); reset to defaults anytime. You can
+also optimize **per deck** (Deck → ⚙️ Options) — handy when one deck's material is
+much stickier than another's; a deck's own weights override the global ones.
+
+**See the model** — each card's ℹ️ info popup draws its **forgetting curve**:
+predicted retention decaying over time, with your target-retention line and the
+resulting next interval marked. Export your full **review history as CSV**
+(Stats → ⬇️) for analysis in a spreadsheet or notebook.
 
 Reverse cards keep a **separate** schedule per direction. Due cards are anything
 whose `due` timestamp has passed (capped by each deck's new-cards-per-day limit).
