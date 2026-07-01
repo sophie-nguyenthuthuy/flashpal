@@ -14,7 +14,11 @@ dependencies, no server. Just open it and study.
 - **Decks & sub-decks** — create decks with a mascot emoji and an **accent
   colour** (tints the deck tile, due-pill and study card); name one
   `Spanish::Verbs` and it nests under a **Spanish** group with an aggregate
-  "study all" button.
+  "study all" button. **Archive** decks you're resting to tuck them away.
+- **Daily goal ring** — a progress ring on the home screen tracks today's
+  reviews against a goal you set (turns green when you hit it).
+- **Notes / mnemonics** — give any card an optional memory-aid note that shows
+  beside the answer and in its info popup.
 - **Cards** — add / **edit** / delete, with **images & audio** (pick a file or
   paste `![](url)` / `@[audio](url)`) and **tags** (filter the deck by tag, or
   study just one tag).

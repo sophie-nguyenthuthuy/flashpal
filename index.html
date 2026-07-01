@@ -111,6 +111,22 @@
 
   .empty { text-align: center; color: #b3a5c8; padding: 40px 0; }
 
+  /* daily-goal ring */
+  .hero-row { align-items: center; gap: 16px; }
+  .goal-ring { display: flex; align-items: center; gap: 10px; }
+  .goal-ring .ring-num { font: 800 15px ui-sans-serif, sans-serif; fill: var(--ink); }
+  .goal-ring .goal-lab { font-size: .85rem; font-weight: 800; color: #9a8bb0; }
+
+  /* archived decks */
+  .archive-sec { border-top: 2px dashed #e6dcff; padding-top: 14px; }
+  body.dark .archive-sec { border-color: #3a3160; }
+  .archive-toggle { background: none; border: none; cursor: pointer; font-family: inherit; font-weight: 800; color: #9a8bb0; font-size: .95rem; padding: 4px; }
+  .archive-toggle .chev { font-size: .8rem; }
+  .archive-grid { margin-top: 12px; }
+  .deck.archived { opacity: .72; }
+  .deck.archived .unarchive { position: absolute; bottom: 12px; right: 40px; background: none; border: none; cursor: pointer; font-size: 1rem; opacity: .6; }
+  .deck.archived .unarchive:hover { opacity: 1; }
+
   /* study view */
   .study { display: none; }
   .study.active { display: block; }
@@ -259,6 +275,8 @@
   .cloze { color: var(--grape-d); font-weight: 800; background: #efe6ff; padding: 0 10px; border-radius: 8px; }
   .cloze-rev { color: var(--mint-d); font-weight: 800; border-bottom: 3px solid var(--mint); }
   .note { color: #b7a9cd; font-size: 1rem; font-weight: 600; margin-top: 14px; }
+  .memo { margin-top: 14px; padding: 10px 14px; background: #fff7e6; border-radius: 12px; color: #9a7b3a; font-size: .95rem; font-weight: 600; display: inline-block; }
+  body.dark .memo { background: #3a3320; color: #e8cd8f; }
 
   /* stats */
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 12px; }
@@ -361,8 +379,9 @@
 
   <!-- HOME -->
   <section id="home">
-    <div class="row" style="margin-bottom: 4px;">
+    <div class="row hero-row" style="margin-bottom: 4px;">
       <button class="btn pink" id="studyAllBtn">✦ Study everything due</button>
+      <div class="goal-ring" id="goalRing"></div>
     </div>
     <div class="decks" id="decks"></div>
   </section>
@@ -427,6 +446,10 @@
     <div class="field">
       <label>Tags <small style="color:#b3a5c8;font-weight:600">— space or comma separated</small></label>
       <input id="cardTags" placeholder="e.g. biology cells exam2" />
+    </div>
+    <div class="field">
+      <label>Note / mnemonic <small style="color:#b3a5c8;font-weight:600">— shown with the answer</small></label>
+      <textarea id="cardNote" rows="2" placeholder="a hint or memory aid (optional)"></textarea>
     </div>
     <div class="field hidden" id="moveField">
       <label>Deck</label>
@@ -545,6 +568,10 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       </div>
     </div>
     <div class="field">
+      <label>Daily goal <small>(reviews per day for the progress ring; 0 = hide)</small></label>
+      <input id="optDailyGoal" type="number" min="0" max="9999" />
+    </div>
+    <div class="field">
       <label>Leech threshold <small>(lapses before a card is flagged & suspended; 0 = off)</small></label>
       <input id="optLeech" type="number" min="0" max="99" />
     </div>
@@ -593,6 +620,7 @@ The {{mitochondria}} is the powerhouse of the cell"></textarea>
       </div>
     </div>
     <div class="modal-actions">
+      <button class="btn ghost sm" id="archiveDeckBtn" style="margin-right:auto">🗄️ Archive</button>
       <button class="btn ghost" data-close>Cancel</button>
       <button class="btn grape" id="saveDeckOpts">Save</button>
     </div>
@@ -631,6 +659,7 @@ function normalize(s) {
   if (typeof s.settings.leech !== 'number' || s.settings.leech < 0) s.settings.leech = 8;
   if (typeof s.settings.autoSpeak !== 'boolean') s.settings.autoSpeak = false;
   if (typeof s.settings.sound !== 'boolean') s.settings.sound = false;
+  if (typeof s.settings.dailyGoal !== 'number' || s.settings.dailyGoal < 0) s.settings.dailyGoal = 20;
   if (s.settings.weights && (!Array.isArray(s.settings.weights) || s.settings.weights.length !== 17 || s.settings.weights.some(x => !isFinite(x)))) {
     delete s.settings.weights; delete s.settings.weightsInfo;
   }
@@ -640,6 +669,7 @@ function normalize(s) {
     if (typeof d.emoji !== 'string') d.emoji = '📚';
     if (typeof d.name !== 'string') d.name = 'Untitled';
     if (!isHex(d.color)) d.color = colorFor(d.name);
+    if (typeof d.archived !== 'boolean') d.archived = false;
     // per-deck study options
     if (!d.opts || typeof d.opts !== 'object') d.opts = {};
     if (typeof d.opts.newPerDay !== 'number' || d.opts.newPerDay < 0) d.opts.newPerDay = 20;
@@ -662,6 +692,7 @@ function normalize(s) {
       if (typeof c.lapses !== 'number') c.lapses = 0;
       if (typeof c.suspended !== 'boolean') c.suspended = false;
       if (!Array.isArray(c.log)) c.log = [];
+      if (typeof c.note !== 'string') c.note = '';
     }
   }
   return s;
@@ -899,7 +930,7 @@ function dueUnits(deck) {                         // due reviews + new cards wit
   }
   return reviews.concat(news.slice(0, budget));
 }
-const allDueUnits = () => state.decks.flatMap(d => dueUnits(d));
+const allDueUnits = () => state.decks.filter(d => !d.archived).flatMap(d => dueUnits(d));
 const dueCards = (deck) => dueUnits(deck);        // count helper (length used for pills)
 
 //// ---------- streak ----------
@@ -947,9 +978,11 @@ function renderHome() {
   $('#home').classList.remove('hidden');
   $('#study').classList.remove('active');
   decksEl.innerHTML = '';
-  // group by top-level segment (decks named "A::B" are sub-decks of "A")
+  renderGoalRing();
+  // group by top-level segment (decks named "A::B" are sub-decks of "A"); archived are set aside
   const groups = new Map();
   for (const d of state.decks) {
+    if (d.archived) continue;
     const top = d.name.split('::')[0].trim();
     if (!groups.has(top)) groups.set(top, []);
     groups.get(top).push(d);
@@ -984,7 +1017,47 @@ function renderHome() {
   add.onclick = openDeckModal;
   singleGrid.appendChild(add);
   decksEl.appendChild(singleGrid);
+  // archived decks (collapsed section)
+  const archived = state.decks.filter(d => d.archived);
+  if (archived.length) {
+    const sec = document.createElement('div');
+    sec.className = 'archive-sec';
+    sec.innerHTML = `<button class="archive-toggle">🗄️ Archived (${archived.length}) <span class="chev">▸</span></button><div class="deckgrid archive-grid hidden"></div>`;
+    const grid = sec.querySelector('.archive-grid');
+    archived.forEach(d => {
+      const el = deckCard(d, false); el.classList.add('archived');
+      const un = document.createElement('button');
+      un.className = 'unarchive'; un.title = 'unarchive'; un.textContent = '↩️';
+      un.onclick = (e) => { e.stopPropagation(); d.archived = false; save(); renderHome(); };
+      el.appendChild(un);
+      grid.appendChild(el);
+    });
+    const tgl = sec.querySelector('.archive-toggle');
+    tgl.onclick = () => { grid.classList.toggle('hidden'); sec.querySelector('.chev').textContent = grid.classList.contains('hidden') ? '▸' : '▾'; };
+    decksEl.appendChild(sec);
+  }
   renderStreak();
+}
+
+// today's-progress ring (reviews done today vs the daily goal)
+function renderGoalRing() {
+  const el = $('#goalRing');
+  const goal = state.settings.dailyGoal || 0;
+  if (!goal) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  const done = (state.history && state.history[todayStr()]) || 0;
+  const frac = Math.min(1, done / goal);
+  const r = 20, C = 2 * Math.PI * r, off = C * (1 - frac);
+  const met = done >= goal;
+  el.innerHTML = `
+    <svg viewBox="0 0 48 48" width="48" height="48">
+      <circle cx="24" cy="24" r="${r}" fill="none" stroke="var(--bg2, #efe6ff)" stroke-width="5"/>
+      <circle cx="24" cy="24" r="${r}" fill="none" stroke="${met ? 'var(--mint-d)' : 'var(--pink-d)'}" stroke-width="5"
+        stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+        transform="rotate(-90 24 24)" style="transition:stroke-dashoffset .6s cubic-bezier(.5,1.6,.4,1)"/>
+      <text x="24" y="28" text-anchor="middle" class="ring-num">${met ? '✓' : done}</text>
+    </svg>
+    <div class="goal-lab">${met ? 'goal met! 🎉' : `${done} / ${goal} today`}</div>`;
 }
 
 function delDeck(id) {
@@ -1148,8 +1221,9 @@ function unitPromptHtml(u) {
   return renderRich(u.dir === 'f' ? u.card.front : u.card.back, false);
 }
 function unitAnswerHtml(u) {
-  if (unitIsCloze(u)) return renderRich(u.card.front, true) + (u.card.back ? `<div class="note">${renderRich(u.card.back, false)}</div>` : '');
-  return renderRich(u.dir === 'f' ? u.card.back : u.card.front, false);
+  const memo = u.card.note ? `<div class="memo">💡 ${renderRich(u.card.note, false)}</div>` : '';
+  if (unitIsCloze(u)) return renderRich(u.card.front, true) + (u.card.back ? `<div class="note">${renderRich(u.card.back, false)}</div>` : '') + memo;
+  return renderRich(u.dir === 'f' ? u.card.back : u.card.front, false) + memo;
 }
 function unitExpected(u) { return u.dir === 'f' ? u.card.back : u.card.front; } // plain, for typed check
 function normAns(s) {
@@ -1411,6 +1485,7 @@ function openCardModal(card) {
   $('#cardFront').value = card ? card.front : '';
   $('#cardBack').value = card ? card.back : '';
   $('#cardTags').value = card && card.tags ? card.tags.join(' ') : '';
+  $('#cardNote').value = card && card.note ? card.note : '';
   $('#cardModalTitle').textContent = card ? '✏️ Edit card' : '🃏 New card';
   $('#addCard').textContent = card ? 'Save changes' : 'Add & keep going ↵';
   // move-card dropdown only makes sense when editing an existing card
@@ -1428,10 +1503,11 @@ function addCardFn() {
   const front = $('#cardFront').value.trim();
   const back = $('#cardBack').value.trim();
   const tags = parseTags($('#cardTags').value);
+  const note = $('#cardNote').value.trim();
   // back is optional for cloze cards (the blanks ARE the answer)
   if (!front || (!back && !CLOZE_RE.test(front))) { flash('Add a front + back (or a {{cloze}} blank) 🃏'); return; }
   if (editingCard) {
-    editingCard.front = front; editingCard.back = back; editingCard.tags = tags;
+    editingCard.front = front; editingCard.back = back; editingCard.tags = tags; editingCard.note = note;
     // move to another deck if changed
     const targetId = $('#cardDeck').value;
     const target = state.decks.find(d => d.id === targetId);
@@ -1443,9 +1519,9 @@ function addCardFn() {
     const moved = target && target !== currentDeck;
     editingCard = null; renderDeckHome(); flash(moved ? `Moved to ${target.emoji} ${target.name} 🚚` : 'Card updated ✨'); return;
   }
-  currentDeck.cards.push({ id: rid(), front, back, tags, ease: 2.5, interval: 0, reps: 0, due: now() });
+  currentDeck.cards.push({ id: rid(), front, back, tags, note, lapses: 0, suspended: false, log: [], ease: 2.5, interval: 0, reps: 0, due: now() });
   save();
-  $('#cardFront').value = ''; $('#cardBack').value = ''; $('#cardTags').value = '';
+  $('#cardFront').value = ''; $('#cardBack').value = ''; $('#cardTags').value = ''; $('#cardNote').value = '';
   $('#cardFront').focus();
   burst(5); flash('Card planted 🌱');
 }
@@ -1555,6 +1631,12 @@ $('#deckOptimizeBtn').onclick = () => {
 $('#deckResetWeightsBtn').onclick = () => {
   delete currentDeck.opts.weights; delete currentDeck.opts.weightsInfo;
   save(); renderDeckFsrs(); flash('Deck now uses the global weights');
+};
+$('#archiveDeckBtn').onclick = () => {
+  const name = currentDeck.name;
+  currentDeck.archived = true; save();
+  $('#deckOptsModal').classList.remove('open');
+  goHome(); flash(`🗄️ Archived "${name}"`);
 };
 $('#saveDeckOpts').onclick = () => {
   const o = currentDeck.opts;
@@ -1879,6 +1961,7 @@ function renderSettings() {
   $('#optRetention').value = Math.round(state.settings.retention * 100);
   $('#retVal').textContent = Math.round(state.settings.retention * 100) + '%';
   $('#optLeech').value = state.settings.leech;
+  $('#optDailyGoal').value = state.settings.dailyGoal;
   $('#optAutoSpeak').checked = state.settings.autoSpeak;
   $('#speakField').style.display = ttsOn() ? '' : 'none';
   $('#optSound').checked = state.settings.sound;
@@ -1916,6 +1999,11 @@ $('#optLeech') && ($('#optLeech').onchange = e => {
 });
 $('#optAutoSpeak').onchange = e => { state.settings.autoSpeak = e.target.checked; save(); };
 $('#optSound').onchange = e => { state.settings.sound = e.target.checked; save(); if (e.target.checked) soundGrade(2); };
+$('#optDailyGoal').onchange = e => {
+  const n = parseInt(e.target.value, 10);
+  state.settings.dailyGoal = Number.isFinite(n) && n >= 0 ? n : 20;
+  e.target.value = state.settings.dailyGoal; save();
+};
 $('#settingsBtn').onclick = () => { renderSettings(); $('#settingsModal').classList.add('open'); };
 
 //// ---------- custom study + cheatsheet ----------
@@ -2019,8 +2107,10 @@ function openCardInfo(card, deck) {
   }
   const curve = (fsrs && f.s != null && f.reps > 0)
     ? `<div class="fc-title">📉 Forgetting curve</div>${forgettingCurve(f.s)}` : '';
+  const memo = card.note ? `<div class="memo">💡 ${renderRich(card.note, false)}</div>` : '';
   $('#cardInfoBody').innerHTML =
     `<div class="ci-front">${renderRich(card.front, false)}</div>
+     ${memo}
      <div class="ci-grid">${rows.map(([k, v]) => `<div class="ci-k">${k}</div><div class="ci-v">${v}</div>`).join('')}</div>
      ${curve}
      <div class="fc-title">Recent grades</div>${sparkline(card.log)}`;
